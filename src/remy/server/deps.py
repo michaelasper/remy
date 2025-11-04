@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Callable, List
 
-from remy.db.inventory import load_inventory
+from remy.db.inventory import list_inventory
 from remy.models.context import InventoryItem, PlanningContext
 from remy.models.plan import Plan
 from remy.planner.app.planner import generate_plan
@@ -22,4 +22,4 @@ def get_plan_generator() -> PlanGenerator:
 def get_inventory_provider() -> InventoryProvider:
     """Return the current inventory provider implementation."""
 
-    return lambda: load_inventory()
+    return lambda: list_inventory()

@@ -31,7 +31,7 @@ class RecentMeal(BaseModel):
 class InventoryItem(BaseModel):
     """Item currently available in the household inventory."""
 
-    id: int
+    id: Optional[int] = Field(default=None)
     name: str
     quantity: float = Field(alias="qty")
     unit: str

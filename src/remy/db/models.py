@@ -1,0 +1,74 @@
+"""SQLAlchemy models representing Remy persistence tables."""
+
+from __future__ import annotations
+
+from datetime import date, datetime
+from typing import Optional
+
+from sqlalchemy import Date, DateTime, Float, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+class Base(DeclarativeBase):
+    """Declarative base class for Remy ORM models."""
+
+
+class InventoryItemORM(Base):
+    """Inventory item persisted in the SQLite database."""
+
+    __tablename__ = "inventory_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    quantity: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    unit: Mapped[str] = mapped_column(String(64), nullable=False, default="g")
+    best_before: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class MealORM(Base):
+    """Historical meal record, including ratings for preference learning."""
+
+    __tablename__ = "meals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    date: Mapped[date] = mapped_column(Date, nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (UniqueConstraint("date", "title", name="uq_meals_date_title"),)
+
+
+class PreferenceORM(Base):
+    """Key/value storage for household preferences (diet, allergens, etc.)."""
+
+    __tablename__ = "preferences"
+
+    key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+__all__ = ["Base", "InventoryItemORM", "MealORM", "PreferenceORM"]

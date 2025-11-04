@@ -23,5 +23,7 @@ env/
 .vscode/
 *.swp
 *.swo
+# Runtime data
+data/
 # macOS
 .DS_Store

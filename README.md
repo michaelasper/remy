@@ -72,6 +72,7 @@ If the planner fails, the system reuses the most recent approved meal as a fallb
 - Start implementation with `planner/app/planner.py::generate_plan()`, ensuring outputs pass the `models.Plan` schema validation.
 - Next milestone focuses on `/plan/approve` to persist approvals and manage inventory mutations.
 - All persistent data remains local; API tokens should be stored in a `.env` file kept out of version control.
+- SQLite persistence lives at `data/remy.db` by default; the first run seeds `inventory_items` from `inventory_snapshot.json` (or built-in defaults) via the repository layer in `src/remy/db/`.
 - When using remote LLMs, redact personally identifiable household details.
 
 ## Testing Strategy
