@@ -29,6 +29,7 @@ NAVIGATION = """
         <a href="/">Planner</a>
         <a href="/inventory/view">Inventory</a>
         <a href="/preferences/view">Preferences</a>
+        <button type="button" id="token-button">API Token</button>
       </nav>
 """
 

@@ -38,7 +38,8 @@
         flex-wrap: wrap;
       }
 
-      nav a {
+      nav a,
+      nav button {
         color: #f5f7fa;
         text-decoration: none;
         font-weight: 600;
@@ -47,9 +48,12 @@
         border: 1px solid rgba(148, 163, 184, 0.4);
         background: rgba(148, 163, 184, 0.12);
         transition: background 0.15s ease, color 0.15s ease;
+        cursor: pointer;
+        font-family: inherit;
       }
 
-      nav a:hover {
+      nav a:hover,
+      nav button:hover {
         background: rgba(255, 255, 255, 0.2);
         color: #fefefe;
       }
@@ -180,6 +184,37 @@ __NAVIGATION__
       Remy API · POST <code>/plan</code>
     </footer>
     <script>
+      const TOKEN_KEY = "remy_api_token";
+
+      function getApiToken() {
+        return window.localStorage.getItem(TOKEN_KEY);
+      }
+
+      function authHeaders(base = {}) {
+        const token = getApiToken();
+        if (!token) {
+          return base;
+        }
+        return { ...base, Authorization: `Bearer ${token}` };
+      }
+
+      const tokenButton = document.getElementById("token-button");
+      if (tokenButton) {
+        tokenButton.addEventListener("click", () => {
+          const current = getApiToken() || "";
+          const next = window.prompt("Enter API token (leave blank to clear)", current);
+          if (next === null) {
+            return;
+          }
+          const trimmed = next.trim();
+          if (trimmed) {
+            window.localStorage.setItem(TOKEN_KEY, trimmed);
+          } else {
+            window.localStorage.removeItem(TOKEN_KEY);
+          }
+        });
+      }
+
       const input = document.getElementById("context-input");
       const output = document.getElementById("plan-output");
       const statusEl = document.getElementById("status");
@@ -202,9 +237,9 @@ __NAVIGATION__
         try {
           const response = await fetch("/plan", {
             method: "POST",
-            headers: {
+            headers: authHeaders({
               "Content-Type": "application/json"
-            },
+            }),
             body: JSON.stringify(payload)
           });
 
