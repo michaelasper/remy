@@ -12,8 +12,13 @@ Remy is a multi-agent automation platform that assembles a daily dinner plan for
 ## Getting Started
 
 - Install dependencies with `pip install -e .[dev]` using Python 3.11 or newer.
+- Optionally install server extras with `pip install -e .[server]` to add the Uvicorn ASGI runner.
 - Run the smoke test suite with `pytest` to validate the scaffolding.
 - Execute `remy plan path/to/context.json --pretty` to generate placeholder plans from a context payload.
+- Launch the API with `uvicorn remy.server.app:app --reload` and POST planning contexts to `/plan`.
+- Open `http://localhost:8000/` for the interactive web UI that submits contexts to the API.
+- Build and run a containerized server with `docker build -t remy .` followed by `docker run -p 8000:8000 remy`.
+- Use `make install-dev`, `make test`, or `make run-server` for common developer workflows.
 
 ## System Architecture
 
@@ -71,6 +76,7 @@ If the planner fails, the system reuses the most recent approved meal as a fallb
 - **Unit Tests**: Validate inventory diffing, normalization logic, and approval mutations.
 - **Schema Tests**: Verify JSON payloads against `models.Plan` and related contracts.
 - **Integration Tests**: Mock Home Assistant APIs to ensure notifications and shopping list updates behave as expected.
+- **API Integration Tests**: Use FastAPI's `TestClient` (see `tests/integration/test_plan_endpoint.py`) to validate dependency overrides and response contracts.
 - **Snapshot Tests**: Run fixed planning contexts to confirm deterministic planner output across revisions.
 
 ## Roadmap
