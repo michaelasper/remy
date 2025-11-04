@@ -9,6 +9,7 @@ services:
     restart: unless-stopped
     environment:
       REMY_DATABASE_PATH: /app/data/remy.db
+      REMY_API_TOKEN: ${REMY_API_TOKEN:-}
     volumes:
       - remy-data:/app/data
     ports:
