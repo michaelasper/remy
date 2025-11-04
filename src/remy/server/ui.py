@@ -52,6 +52,9 @@ HTML_PAGE = f"""<!DOCTYPE html>
         padding: 1.5rem;
         background: #1f2933;
         color: #f5f7fa;
+        position: sticky;
+        top: 0;
+        z-index: 10;
       }}
 
       header h1 {{
@@ -59,39 +62,64 @@ HTML_PAGE = f"""<!DOCTYPE html>
         font-size: 1.75rem;
       }}
 
+      nav {{
+        display: flex;
+        gap: 1rem;
+        margin-top: 0.75rem;
+        flex-wrap: wrap;
+      }}
+
       nav a {{
         color: #f5f7fa;
         text-decoration: none;
-        margin-right: 1rem;
         font-weight: 600;
+        padding: 0.35rem 0.75rem;
+        border-radius: 0.5rem;
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        background: rgba(148, 163, 184, 0.12);
+        transition: background 0.15s ease, color 0.15s ease;
       }}
 
       nav a:hover {{
-        text-decoration: underline;
+        background: rgba(255, 255, 255, 0.2);
+        color: #fefefe;
       }}
 
       main {{
         flex: 1;
-        padding: 1.5rem;
+        padding: 2rem;
+        background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
         display: grid;
-        gap: 1.5rem;
-        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-        background: #f8fafc;
+        gap: 2rem;
+        grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+        align-items: stretch;
       }}
 
       section {{
         background: white;
         border-radius: 0.75rem;
-        padding: 1.5rem;
+        padding: 1.75rem;
         box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
         display: flex;
         flex-direction: column;
         gap: 1rem;
+        min-height: 520px;
+      }}
+
+      section h2 {{
+        margin: 0;
+        font-size: 1.4rem;
+        color: #0f172a;
+      }}
+
+      section p {{
+        margin: 0;
+        color: #475569;
       }}
 
       textarea {{
         width: 100%;
-        min-height: 320px;
+        min-height: 100%;
         font-family:
           "JetBrains Mono",
           ui-monospace,
@@ -106,9 +134,19 @@ HTML_PAGE = f"""<!DOCTYPE html>
         padding: 1rem;
         border-radius: 0.5rem;
         border: 1px solid #cbd5e1;
-        resize: vertical;
+        resize: none;
         background: #0b0f19;
         color: #f5f7fa;
+      }}
+
+      .editor-wrapper {{
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }}
+
+      .editor-wrapper textarea {{
+        flex: 1;
       }}
 
       button {{
@@ -139,7 +177,6 @@ HTML_PAGE = f"""<!DOCTYPE html>
         border-radius: 0.5rem;
         flex: 1;
         overflow: auto;
-        max-height: 420px;
       }}
 
       .status {{
@@ -165,8 +202,10 @@ HTML_PAGE = f"""<!DOCTYPE html>
       <section>
         <h2>Planning Context JSON</h2>
         <p>Paste or tweak a planning context. Press “Generate Plan” to call the API.</p>
-        <textarea id="context-input" spellcheck="false">{ESCAPED_SAMPLE_CONTEXT}</textarea>
-        <div>
+        <div class="editor-wrapper">
+          <textarea id="context-input" spellcheck="false">{ESCAPED_SAMPLE_CONTEXT}</textarea>
+        </div>
+        <div class="controls">
           <button id="generate-btn">Generate Plan</button>
         </div>
         <div class="status" id="status"></div>
