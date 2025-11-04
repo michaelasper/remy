@@ -20,7 +20,7 @@ PORT ?= 8000
 DURATION ?=
 COMPOSE ?= docker compose
 
-.PHONY: install install-dev install-server test lint typecheck format run-server docker-build docker-run clean
+.PHONY: install install-dev install-server test test-e2e lint typecheck format run-server docker-build docker-run clean
 
 install:
 	$(PIP) install -e .
@@ -33,6 +33,9 @@ install-server:
 
 test:
 	$(PYTEST)
+
+test-e2e:
+	RUN_E2E=1 $(PYTHON) -m pytest tests/e2e
 
 lint:
 	$(RUFF) check src tests

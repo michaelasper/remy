@@ -21,6 +21,7 @@ Remy is a multi-agent automation platform that assembles a daily dinner plan for
 - Use `make install-dev`, `make test`, or `make run-server` (set `DURATION=5` for a temporary run). The Makefile auto-detects `.venv/bin/python` when present.
 - Prefer a reproducible environment via `.devcontainer/devcontainer.json` (VS Code Dev Containers / `devcontainer up`) when collaborating.
 - For a deployable stack with persistent SQLite storage, use `docker compose up --build -d`; data lives in the `remy-data` volume exposed in `docker-compose.yml`.
+- Run Docker-based end-to-end checks with `RUN_E2E=1 pytest tests/e2e` or `make test-e2e` (Docker & Docker Compose required).
 
 ## System Architecture
 
@@ -80,6 +81,7 @@ If the planner fails, the system reuses the most recent approved meal as a fallb
 - **Integration Tests**: Mock Home Assistant APIs to ensure notifications and shopping list updates behave as expected.
 - **API Integration Tests**: Use FastAPI's `TestClient` (see `tests/integration/test_plan_endpoint.py`) to validate dependency overrides and response contracts.
 - **Snapshot Tests**: Run fixed planning contexts to confirm deterministic planner output across revisions.
+- **End-to-End**: Launch the Docker Compose stack and verify the planner endpoint via `tests/e2e/test_compose_plan.py` (requires `RUN_E2E=1`).
 
 ## Roadmap
 
