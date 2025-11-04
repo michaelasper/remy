@@ -1,6 +1,6 @@
-AGENTS.md — Jarvis Dinner Planner
+AGENTS.md — Jarvis Dinner Planner (Remy)
 
-Purpose: Define the multi-agent architecture and goals so Codex (and future contributors) can reason about the system’s structure, context, and success metrics.
+Purpose: Keep a living map of the multi-agent architecture, runtime surfaces, and success metrics so contributors (human or automated) can ship changes confidently.
 
 ⸻
 
@@ -16,17 +16,18 @@ Create a daily dinner-planning automation that:
 
 🧩 Agents Overview
 
-Agent	Purpose	Inputs	Outputs	Notes
-Context Assembler	Builds LLM planning context from DB and external sources.	SQLite data, preferences, leftovers.	planning_context.json	Prepares all structured data for the planner.
-Menu Planner	LLM or rules engine generating candidate meals.	planning_context.json	Plan (JSON)	Uses planner.generate_plan(); initially mock, later local LLM.
-Diff & Validator	Canonicalizes ingredient names, computes shortages, validates JSON.	Planner output, inventory DB.	Normalized plan + shopping_shortfall.	Ensures schema compliance.
-Approvals Orchestrator	Handles human approval, DB updates, notifications.	Normalized plan.	Meal + inventory mutations.	Transactional changes.
-Shopping Dispatcher	Sends grocery needs to Home Assistant list or vendor cart.	Shortfall list.	HA API calls.	Future: Instacart, Amazon, etc.
-Receipt Ingestor	Parses CSV/email/OCR receipts to update inventory.	Raw receipt data.	Inventory upserts.	Enables passive updates.
-Nutrition Estimator	Calculates macros using per-ingredient nutrition table.	Ingredient quantities.	macros_per_serving	Optional extension.
-Notifier	Communicates plans and updates to users.	Message payloads.	HA notification or push.	Ensures timely alerts.
+| Agent | Purpose | Inputs | Outputs | Notes |
+| --- | --- | --- | --- | --- |
+| Context Assembler | Build LLM planning context from DB + external signals. | SQLite / JSON snapshots, preferences, leftovers | `planning_context.json` | Current stub returns defaults; next major integration point. |
+| Menu Planner | Generate candidate meals. | `planning_context.json` | Plan JSON | Stub delegates to `planner.generate_plan()`; replace with rules/LLM. |
+| Diff & Validator | Canonicalize ingredients, compute shortages. | Planner output, inventory | Normalized plan + `shopping_shortfall` | Placeholder; needs schema + diff logic. |
+| Approvals Orchestrator | Handle human approval, dispatch updates. | Normalized plan | Meal + inventory mutations | To be built once DB writes exist. |
+| Shopping Dispatcher | Push shortages to shopping services. | `shopping_shortfall` | HA API calls, future vendor carts | Stubbed. |
+| Receipt Ingestor | Parse receipts/OCR -> inventory updates. | Images/CSV/email | Inventory upserts | Local OCR pipeline planned (Tesseract/EasyOCR). |
+| Nutrition Estimator | Compute macros per serving. | Candidate ingredients | `macros_per_serving` | Optional extension. |
+| Notifier | Deliver plan + follow-ups to humans. | Message payloads | Home Assistant notifications / push | Stubbed.
 
-Future agents: Calendar Integrator, Preference Learner, Variety Scheduler, Vision Pantry Scanner.
+Future agents: Calendar Integrator, Preference Learner, Variety Scheduler, Vision Pantry Scanner, Local LLM evaluator.
 
 ⸻
 
@@ -73,25 +74,35 @@ Plan (normalized output)
 
 ⸻
 
-⚙️ Tools and APIs
-	•	Database: SQLite tables (inventory, meals, prefs, ingredients).
-	•	LLM Runtime: generate_plan(context_json) (Ollama/vLLM once available).
-	•	Home Assistant:
-	•	Notifications → /api/services/persistent_notification/create
-	•	Shopping list → /api/shopping_list/item
-	•	Scheduler: APScheduler @ 15:00 local time.
-	•	Web UI: /plan/today viewer and future /plan/approve endpoint.
+⚙️ Runtime Surfaces & Tooling
+
+- Python 3.11 (pyenv `.python-version` or `.venv`), project metadata in `pyproject.toml`.
+- CLI entry point: `remy plan path/to/context.json --pretty`.
+- FastAPI server (`remy.server.app:app`) with endpoints:
+  - `POST /plan` — generate candidates.
+  - `GET /inventory` — list current inventory snapshot.
+  - `GET /inventory/view` — HTML table view.
+- Web UI served at `/` (planner workspace) + `/inventory/view`.
+- Docker:
+  - `Dockerfile` builds non-root image with persisted `/app/data`.
+  - `docker-compose.yml` exposes API on `:8000` and mounts `remy-data` volume.
+- Makefile targets:
+  - `install`, `install-dev`, `install-server`, `test`, `lint`, `typecheck`, `format`.
+  - `run-server` (optionally `DURATION=5`), `docker-build`, `docker-run`.
+  - `compose-up/down/logs`, `test-e2e` (requires Docker daemon).
+- Dev Container support (`.devcontainer/`) for VS Code / `devcontainer up`.
+- Settings via environment: `REMY_DATABASE_PATH`, `REMY_HOME_ASSISTANT_*`.
 
 ⸻
 
-🔁 Daily Task Graph
-	1.	Context Assembler builds context JSON.
-	2.	Menu Planner returns a plan.
-	3.	Diff & Validator normalizes + computes shortages.
-	4.	Approvals Orchestrator posts summary via Notifier.
-	5.	On approval → update DB + dispatch shopping items.
+🔁 Daily Task Graph (Target State)
+1. **Context Assembler** pulls inventory (DB/snapshot), preferences, leftovers, calendar cues.
+2. **Menu Planner** (rules/LLM) emits up to 3 candidate dinners.
+3. **Diff & Validator** normalizes ingredients, calculates shortages, enforces schema.
+4. **Approvals Orchestrator** notifies household, accepts approval/decline.
+5. On approval, update inventory + push shopping deltas via **Shopping Dispatcher**.
 
-Fallback: reuse last approved meal if planner fails.
+Fallback: resend most recent approved plan if planner or approval flow fails.
 
 ⸻
 
@@ -139,19 +150,23 @@ Guardrails
 ⸻
 
 🧪 Testing Strategy
-	•	Unit: inventory diffing, normalization, approval mutations.
-	•	Schema: JSON validation vs. models.Plan.
-	•	Integration: HA API mock tests.
-	•	Snapshot: fixed mock context → deterministic plan output.
+
+- **Unit**: planner scaffolds, future diff/normalization logic.
+- **Schema**: Pydantic validation for `PlanningContext` & `Plan`.
+- **Integration**:
+  - FastAPI endpoints via `TestClient` (`tests/integration/`).
+  - Inventory API/HTML view + plan endpoint coverage.
+- **End-to-end**: `tests/e2e/test_compose_plan.py` spins up Docker Compose stack (opt-in with `RUN_E2E=1`).
+- **Snapshot**: TODO once real planner output exists.
 
 ⸻
 
 🚀 Rollout Phases
-	1.	MVP: mock planner, manual CSV imports, HA notifications.
-	2.	LLM Integration: connect to Ollama/vLLM.
-	3.	RAG Recipe Corpus: embed 100–300 local recipes.
-	4.	Receipt OCR/email ingestion.
-	5.	Nutrition scoring and variety tracking.
+1. **MVP (current)**: mock planner, inventory snapshot, FastAPI + web UI, Docker Compose baseline.
+2. **Data Wiring**: real SQLite schema, Context Assembler reading/writing DB, Approvals flow.
+3. **Smart Planner**: integrate Ollama/vLLM + recipe corpus (RAG).
+4. **Receipt OCR**: local Tesseract/EasyOCR pipeline, Receipt Ingestor→inventory updates.
+5. **Automation Enhancements**: Notifications, shopping integrations, nutrition scoring, preference learning.
 
 ⸻
 
@@ -169,4 +184,9 @@ Guardrails
 
 ⸻
 
-Implementation Hook: Start with planner/app/planner.py::generate_plan(); ensure models.Plan validation passes. Next milestone → /plan/approve endpoint to persist approvals.
+Implementation Hooks
+- Replace `src/remy/planner/app/planner.py::generate_plan` placeholder with real logic (rules → LLM).
+- Implement SQLite models/repositories (inventory, meals, preferences) and connect Context Assembler.
+- Build Approvals flow + `/plan/approve` endpoint, update Notifier + Shopping Dispatcher.
+- Implement local OCR pipeline in `ReceiptIngestor` once inventory schema is live.
+- Harden Docker stack (health checks, production env overrides) and expand e2e coverage.
