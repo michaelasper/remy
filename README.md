@@ -75,6 +75,7 @@ If the planner fails, the system reuses the most recent approved meal as a fallb
 - All persistent data remains local; API tokens should be stored in a `.env` file kept out of version control.
 - SQLite persistence lives at `data/remy.db` by default; the first run seeds `inventory_items` from `inventory_snapshot.json` (or built-in defaults) via the repository layer in `src/remy/db/`.
 - Set `REMY_API_TOKEN` to require authenticated requests for `/plan` and inventory/preferences mutations (Bearer, `X-API-Key`, or `api_token` query support).
+- Set `REMY_LOG_LEVEL` (default `INFO`, local `.env` uses `DEBUG`) to control structured logging emitted via `logging.basicConfig`.
 - When using remote LLMs, redact personally identifiable household details.
 
 ## Testing Strategy

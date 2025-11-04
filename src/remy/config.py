@@ -29,6 +29,7 @@ class Settings(BaseModel):
         default=None,
         description="Bearer token required for authenticated endpoints.",
     )
+    log_level: str = Field(default="INFO", description="Logging level (DEBUG/INFO/WARNING/ERROR)")
 
     model_config = ConfigDict(frozen=True)
 
@@ -45,6 +46,8 @@ def _load_from_env() -> dict[str, object]:
         payload["home_assistant_token"] = ha_token
     if (api_token := os.environ.get("REMY_API_TOKEN")):
         payload["api_token"] = api_token
+    if (log_level := os.environ.get("REMY_LOG_LEVEL")):
+        payload["log_level"] = log_level
     return payload
 
 

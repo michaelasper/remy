@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from typing import Optional
 
@@ -9,13 +10,30 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from pydantic import BaseModel, Field
 
 from remy import __version__
+from remy.config import get_settings
 from remy.models.context import InventoryItem, PlanningContext, Preferences
 from remy.models.plan import Plan
 from remy.server import deps, ui
 
 
+def _configure_logging(level_name: str) -> None:
+    numeric_level = getattr(logging, level_name.upper(), logging.INFO)
+    root_logger = logging.getLogger()
+    if not root_logger.handlers:
+        logging.basicConfig(
+            level=numeric_level,
+            format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+        )
+    else:
+        root_logger.setLevel(numeric_level)
+    logging.getLogger("uvicorn").setLevel(numeric_level)
+
+
 def create_app() -> FastAPI:
     """Create and configure a FastAPI application instance."""
+
+    settings = get_settings()
+    _configure_logging(settings.log_level)
 
     application = FastAPI(title="Remy Dinner Planner", version=__version__)
 
