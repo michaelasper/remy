@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Remy Inventory</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background: #eef2f7;
+        color: #0f172a;
+      }
+
+      header {
+        background: #1f2933;
+        color: #f5f7fa;
+        padding: 1.75rem;
+      }
+
+      nav {
+        display: flex;
+        gap: 1rem;
+        margin-top: 0.75rem;
+        flex-wrap: wrap;
+      }
+
+      nav a {
+        color: #f5f7fa;
+        text-decoration: none;
+        font-weight: 600;
+        padding: 0.35rem 0.75rem;
+        border-radius: 0.5rem;
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        background: rgba(148, 163, 184, 0.12);
+        transition: background 0.15s ease, color 0.15s ease;
+      }
+
+      nav a:hover {
+        background: rgba(255, 255, 255, 0.2);
+        color: #fefefe;
+      }
+
+      main {
+        flex: 1;
+        padding: 2rem;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+        gap: 2rem;
+      }
+
+      .inventory-card {
+        background: #ffffff;
+        border-radius: 0.85rem;
+        box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12);
+        padding: 1.75rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 0.75rem 1rem;
+        text-align: left;
+      }
+
+      th {
+        background: #0f172a;
+        color: #f5f7fa;
+      }
+
+      tbody tr:nth-child(even) {
+        background: #f8fafc;
+      }
+
+      tbody tr:hover {
+        background: #e2e8f0;
+      }
+
+      .inventory-updated {
+        font-size: 0.9rem;
+        color: #64748b;
+      }
+
+      .actions {
+        display: flex;
+        gap: 0.5rem;
+      }
+
+      .actions button {
+        padding: 0.4rem 0.75rem;
+        border-radius: 0.45rem;
+        border: 1px solid transparent;
+        cursor: pointer;
+        font-weight: 600;
+      }
+
+      .actions button[data-action="update"] {
+        background: #2563eb;
+        color: #ffffff;
+      }
+
+      .actions button[data-action="update"]:hover {
+        background: #1d4ed8;
+      }
+
+      .actions button[data-action="delete"] {
+        background: #fef2f2;
+        color: #b91c1c;
+        border-color: rgba(239, 68, 68, 0.35);
+      }
+
+      .actions button[data-action="delete"]:hover {
+        background: #fee2e2;
+      }
+
+      .qty-input {
+        width: 6rem;
+        padding: 0.4rem 0.5rem;
+        border-radius: 0.5rem;
+        border: 1px solid #cbd5e1;
+        font-size: 0.95rem;
+      }
+
+      .inventory-form {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .form-grid {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      }
+
+      label {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+        font-weight: 600;
+        color: #0f172a;
+      }
+
+      input,
+      select {
+        padding: 0.55rem 0.7rem;
+        border-radius: 0.55rem;
+        border: 1px solid #cbd5e1;
+        font-size: 1rem;
+      }
+
+      .btn-primary {
+        align-self: flex-start;
+        padding: 0.6rem 1.2rem;
+        border-radius: 0.6rem;
+        border: none;
+        background: linear-gradient(135deg, #2563eb, #4338ca);
+        color: #fefefe;
+        font-weight: 700;
+        cursor: pointer;
+        transition: opacity 0.2s ease;
+      }
+
+      .btn-primary:hover {
+        opacity: 0.92;
+      }
+
+      .form-status {
+        font-size: 0.9rem;
+        min-height: 1.2rem;
+        color: #475569;
+      }
+
+      footer {
+        padding: 1rem 1.5rem;
+        text-align: center;
+        background: #1f2933;
+        color: #9aa5b1;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Inventory Overview</h1>
+      <p>Snapshot of current pantry stock with best-before details when available.</p>
+__NAVIGATION__
+    </header>
+    <main>
+      <section class="inventory-card">
+        <div>
+          <h2>Current Stock</h2>
+          <p class="inventory-updated" id="inventory-updated">Loading inventory…</p>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Quantity</th>
+              <th>Unit</th>
+              <th>Best Before</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="inventory-body"></tbody>
+        </table>
+      </section>
+      <section class="inventory-card">
+        <h2>Add Item</h2>
+        <p class="form-status" id="inventory-form-status"></p>
+        <form class="inventory-form" id="inventory-form">
+          <div class="form-grid">
+            <label>Item name
+              <input type="text" id="inv-name" required maxlength="255" />
+            </label>
+            <label>Quantity
+              <input type="number" id="inv-quantity" min="0" step="0.1" required />
+            </label>
+            <label>Unit
+              <input type="text" id="inv-unit" value="g" maxlength="64" required />
+            </label>
+            <label>Best before
+              <input type="date" id="inv-best-before" />
+            </label>
+            <label>Notes
+              <input type="text" id="inv-notes" maxlength="500" placeholder="optional" />
+            </label>
+          </div>
+          <button type="submit" class="btn-primary">Add to Inventory</button>
+        </form>
+      </section>
+    </main>
+    <footer>
+      Remy API · GET <code>/inventory</code>, POST/PUT/DELETE for updates
+    </footer>
+    <script>
+      const inventoryBody = document.getElementById("inventory-body");
+      const inventoryUpdated = document.getElementById("inventory-updated");
+      const inventoryForm = document.getElementById("inventory-form");
+      const formStatus = document.getElementById("inventory-form-status");
+
+      async function loadInventory() {
+        inventoryBody.innerHTML = "";
+        try {
+          const response = await fetch("/inventory");
+          if (!response.ok) {
+            throw new Error(`Request failed with status ${response.status}`);
+          }
+          const data = await response.json();
+          if (!Array.isArray(data) || data.length === 0) {
+            inventoryUpdated.textContent = "No inventory records found.";
+            return;
+          }
+
+          const rows = data.map((item) => {
+            const qty = item.qty ?? item.quantity ?? "—";
+            const bestBefore = item.best_before ?? "—";
+            return `<tr data-id="${item.id}">
+              <td>${item.id ?? "—"}</td>
+              <td>${item.name}</td>
+              <td>
+                <input class="qty-input" type="number" min="0" step="0.1" value="${qty}" />
+              </td>
+              <td>${item.unit ?? ""}</td>
+              <td>${bestBefore}</td>
+              <td class="actions">
+                <button data-action="update">Save</button>
+                <button data-action="delete">Delete</button>
+              </td>
+            </tr>`;
+          });
+          inventoryBody.innerHTML = rows.join("");
+          inventoryUpdated.textContent = `Showing ${data.length} items.`;
+        } catch (error) {
+          inventoryUpdated.textContent = `Error loading inventory: ${error}`;
+        }
+      }
+
+      async function handleInventoryUpdate(event) {
+        if (event.target.tagName !== "BUTTON") {
+          return;
+        }
+
+        const action = event.target.dataset.action;
+        const row = event.target.closest("tr");
+        const id = row?.dataset.id;
+        if (!id) {
+          return;
+        }
+
+        if (action === "update") {
+          const qtyField = row.querySelector(".qty-input");
+          const quantity = parseFloat(qtyField.value);
+          if (Number.isNaN(quantity) || quantity < 0) {
+            alert("Quantity must be a positive number.");
+            return;
+          }
+          try {
+            const response = await fetch(`/inventory/${id}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ quantity }),
+            });
+            if (!response.ok) {
+              throw new Error(`Update failed (${response.status})`);
+            }
+            await loadInventory();
+          } catch (error) {
+            alert(error);
+          }
+          return;
+        }
+
+        if (action === "delete") {
+          if (!confirm("Delete this inventory item?")) {
+            return;
+          }
+          try {
+            const response = await fetch(`/inventory/${id}`, { method: "DELETE" });
+            if (!response.ok) {
+              throw new Error(`Delete failed (${response.status})`);
+            }
+            await loadInventory();
+          } catch (error) {
+            alert(error);
+          }
+        }
+      }
+
+      inventoryBody.addEventListener("click", handleInventoryUpdate);
+
+      inventoryForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const payload = {
+          name: document.getElementById("inv-name").value.trim(),
+          quantity: parseFloat(document.getElementById("inv-quantity").value),
+          unit: document.getElementById("inv-unit").value.trim(),
+          best_before: document.getElementById("inv-best-before").value || null,
+          notes: document.getElementById("inv-notes").value.trim() || null,
+        };
+
+        if (!payload.name) {
+          formStatus.textContent = "Name is required.";
+          formStatus.style.color = "#b91c1c";
+          return;
+        }
+
+        if (Number.isNaN(payload.quantity) || payload.quantity <= 0) {
+          formStatus.textContent = "Quantity must be greater than zero.";
+          formStatus.style.color = "#b91c1c";
+          return;
+        }
+
+        try {
+          const response = await fetch("/inventory", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          if (!response.ok) {
+            throw new Error(`Add failed (${response.status})`);
+          }
+          inventoryForm.reset();
+          document.getElementById("inv-unit").value = "g";
+          formStatus.textContent = "Item added to inventory.";
+          formStatus.style.color = "#16a34a";
+          await loadInventory();
+        } catch (error) {
+          formStatus.textContent = `Error: ${error}`;
+          formStatus.style.color = "#b91c1c";
+        }
+      });
+
+      loadInventory();
+    </script>
+  </body>
+</html>

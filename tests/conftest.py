@@ -9,6 +9,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from remy.config import get_settings
+from remy.db.repository import reset_repository_state
 from remy.models.plan import (
     IngredientRequirement,
     InventoryDelta,
@@ -73,3 +75,15 @@ def sample_plan() -> Plan:
         macros_per_serving=None,
     )
     return Plan(date=date.today(), candidates=[candidate])
+@pytest.fixture(autouse=True)
+def isolated_settings(tmp_path, monkeypatch):
+    """Ensure each test uses an isolated SQLite database location."""
+
+    db_path = tmp_path / "test_remy.db"
+    monkeypatch.setenv("REMY_DATABASE_PATH", str(db_path))
+    get_settings.cache_clear()
+    reset_repository_state()
+    yield
+    reset_repository_state()
+    monkeypatch.delenv("REMY_DATABASE_PATH", raising=False)
+    get_settings.cache_clear()

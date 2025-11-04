@@ -3,10 +3,13 @@ from __future__ import annotations
 import pytest
 
 from remy.config import get_settings
-from remy.db.inventory import list_inventory, save_inventory_item
+from remy.db.inventory import (
+    create_inventory_item,
+    list_inventory,
+    update_inventory_item,
+)
 from remy.db.models import InventoryItemORM
 from remy.db.repository import reset_repository_state, session_scope
-from remy.models.context import InventoryItem
 
 
 @pytest.fixture()
@@ -36,8 +39,7 @@ def test_save_inventory_item_persists_changes(isolated_db):
     base_items = list_inventory()
     original_count = len(base_items)
 
-    new_item = InventoryItem(name="sweet potatoes", quantity=500, unit="g")
-    saved = save_inventory_item(new_item)
+    saved = create_inventory_item(name="sweet potatoes", quantity=500, unit="g")
 
     assert saved.id is not None
     assert saved.name == "sweet potatoes"
@@ -47,7 +49,7 @@ def test_save_inventory_item_persists_changes(isolated_db):
     assert any(item.name == "sweet potatoes" for item in items)
 
     # Update existing item quantity
-    updated = save_inventory_item(InventoryItem(id=saved.id, name=saved.name, qty=250, unit="g"))
+    updated = update_inventory_item(saved.id, quantity=250)
     assert updated.quantity == 250
 
     with session_scope() as session:

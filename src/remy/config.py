@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Settings(BaseModel):
@@ -25,9 +25,12 @@ class Settings(BaseModel):
         default=None,
         description="Long-lived access token.",
     )
+    api_token: Optional[str] = Field(
+        default=None,
+        description="Bearer token required for authenticated endpoints.",
+    )
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 def _load_from_env() -> dict[str, object]:
@@ -40,6 +43,8 @@ def _load_from_env() -> dict[str, object]:
         payload["home_assistant_base_url"] = ha_url
     if (ha_token := os.environ.get("REMY_HOME_ASSISTANT_TOKEN")):
         payload["home_assistant_token"] = ha_token
+    if (api_token := os.environ.get("REMY_API_TOKEN")):
+        payload["api_token"] = api_token
     return payload
 
 

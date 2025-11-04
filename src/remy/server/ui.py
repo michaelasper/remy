@@ -8,6 +8,8 @@ import json
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
+from remy.server.templates import load as load_template
+
 SAMPLE_CONTEXT = {
     "date": "2025-01-01",
     "prefs": {"diet": "omnivore", "max_time_min": 30, "allergens": []},
@@ -26,407 +28,26 @@ NAVIGATION = """
       <nav>
         <a href="/">Planner</a>
         <a href="/inventory/view">Inventory</a>
+        <a href="/preferences/view">Preferences</a>
       </nav>
 """
 
-HTML_PAGE = f"""<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Remy Dinner Planner</title>
-    <style>
-      :root {{
-        color-scheme: light dark;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      }}
+HTML_PAGE = (
+    load_template("planner.html")
+    .replace("__NAVIGATION__", NAVIGATION)
+    .replace("__SAMPLE_CONTEXT__", ESCAPED_SAMPLE_CONTEXT)
+)
 
-      body {{
-        margin: 0;
-        display: flex;
-        flex-direction: column;
-        min-height: 100vh;
-      }}
+INVENTORY_PAGE = load_template("inventory.html").replace("__NAVIGATION__", NAVIGATION)
 
-      header {{
-        padding: 1.5rem;
-        background: #1f2933;
-        color: #f5f7fa;
-        position: sticky;
-        top: 0;
-        z-index: 10;
-      }}
-
-      header h1 {{
-        margin: 0 0 0.25rem 0;
-        font-size: 1.75rem;
-      }}
-
-      nav {{
-        display: flex;
-        gap: 1rem;
-        margin-top: 0.75rem;
-        flex-wrap: wrap;
-      }}
-
-      nav a {{
-        color: #f5f7fa;
-        text-decoration: none;
-        font-weight: 600;
-        padding: 0.35rem 0.75rem;
-        border-radius: 0.5rem;
-        border: 1px solid rgba(148, 163, 184, 0.4);
-        background: rgba(148, 163, 184, 0.12);
-        transition: background 0.15s ease, color 0.15s ease;
-      }}
-
-      nav a:hover {{
-        background: rgba(255, 255, 255, 0.2);
-        color: #fefefe;
-      }}
-
-      main {{
-        flex: 1;
-        padding: 2rem;
-        background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
-        display: grid;
-        gap: 2rem;
-        grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
-        align-items: stretch;
-      }}
-
-      section {{
-        background: white;
-        border-radius: 0.75rem;
-        padding: 1.75rem;
-        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-        min-height: 520px;
-      }}
-
-      section h2 {{
-        margin: 0;
-        font-size: 1.4rem;
-        color: #0f172a;
-      }}
-
-      section p {{
-        margin: 0;
-        color: #475569;
-      }}
-
-      textarea {{
-        width: 100%;
-        min-height: 100%;
-        font-family:
-          "JetBrains Mono",
-          ui-monospace,
-          SFMono-Regular,
-          Menlo,
-          Monaco,
-          Consolas,
-          "Liberation Mono",
-          "Courier New",
-          monospace;
-        font-size: 0.9rem;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        border: 1px solid #cbd5e1;
-        resize: none;
-        background: #0b0f19;
-        color: #f5f7fa;
-      }}
-
-      .editor-wrapper {{
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-      }}
-
-      .editor-wrapper textarea {{
-        flex: 1;
-      }}
-
-      button {{
-        cursor: pointer;
-        border: none;
-        border-radius: 0.5rem;
-        padding: 0.75rem 1rem;
-        background: #2563eb;
-        color: white;
-        font-size: 1rem;
-        font-weight: 600;
-        transition: background 0.15s ease;
-      }}
-
-      button:hover {{
-        background: #1d4ed8;
-      }}
-
-      pre {{
-        margin: 0;
-        white-space: pre-wrap;
-        word-break: break-word;
-        font-size: 0.9rem;
-        line-height: 1.4;
-        background: #0b0f19;
-        color: #f5f7fa;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        flex: 1;
-        overflow: auto;
-      }}
-
-      .status {{
-        font-size: 0.95rem;
-        min-height: 1.5rem;
-      }}
-
-      footer {{
-        padding: 1rem 1.5rem;
-        text-align: center;
-        background: #1f2933;
-        color: #9aa5b1;
-      }}
-    </style>
-  </head>
-  <body>
-    <header>
-      <h1>Remy Dinner Planner</h1>
-      <p>Craft dinner plans from your pantry inventory and preferences.</p>
-{NAVIGATION}
-    </header>
-    <main>
-      <section>
-        <h2>Planning Context JSON</h2>
-        <p>Paste or tweak a planning context. Press “Generate Plan” to call the API.</p>
-        <div class="editor-wrapper">
-          <textarea id="context-input" spellcheck="false">{ESCAPED_SAMPLE_CONTEXT}</textarea>
-        </div>
-        <div class="controls">
-          <button id="generate-btn">Generate Plan</button>
-        </div>
-        <div class="status" id="status"></div>
-      </section>
-      <section>
-        <h2>Plan Response</h2>
-        <pre id="plan-output">// Waiting for plan…</pre>
-      </section>
-    </main>
-    <footer>
-      Remy API · POST <code>/plan</code>
-    </footer>
-    <script>
-      const input = document.getElementById("context-input");
-      const output = document.getElementById("plan-output");
-      const statusEl = document.getElementById("status");
-      const button = document.getElementById("generate-btn");
-
-      async function fetchPlan() {{
-        let payload;
-        try {{
-          payload = JSON.parse(input.value);
-        }} catch (error) {{
-          statusEl.textContent = "Invalid JSON: " + error.message;
-          statusEl.style.color = "#dc2626";
-          return;
-        }}
-
-        statusEl.textContent = "Requesting plan…";
-        statusEl.style.color = "#1f2933";
-        button.disabled = true;
-
-        try {{
-          const response = await fetch("/plan", {{
-            method: "POST",
-            headers: {{
-              "Content-Type": "application/json"
-            }},
-            body: JSON.stringify(payload)
-          }});
-
-          const text = await response.text();
-          if (!response.ok) {{
-            statusEl.textContent = `Error: ${{response.status}} ${{response.statusText}}`;
-            statusEl.style.color = "#dc2626";
-            output.textContent = text;
-            return;
-          }}
-
-          const data = JSON.parse(text);
-          output.textContent = JSON.stringify(data, null, 2);
-          statusEl.textContent = "Plan generated successfully.";
-          statusEl.style.color = "#16a34a";
-        }} catch (error) {{
-          statusEl.textContent = "Request failed: " + error;
-          statusEl.style.color = "#dc2626";
-          output.textContent = "";
-        }} finally {{
-          button.disabled = false;
-        }}
-      }}
-
-      button.addEventListener("click", fetchPlan);
-    </script>
-  </body>
-</html>
-"""
-
-INVENTORY_PAGE = f"""<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Remy Inventory</title>
-    <style>
-      :root {{
-        color-scheme: light dark;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      }}
-
-      body {{
-        margin: 0;
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-        background: #f8fafc;
-        color: #1f2933;
-      }}
-
-      header {{
-        background: #1f2933;
-        color: #f5f7fa;
-        padding: 1.5rem;
-      }}
-
-      nav a {{
-        color: #f5f7fa;
-        text-decoration: none;
-        margin-right: 1rem;
-        font-weight: 600;
-      }}
-
-      nav a:hover {{
-        text-decoration: underline;
-      }}
-
-      main {{
-        flex: 1;
-        padding: 1.5rem;
-        display: flex;
-        flex-direction: column;
-        gap: 1.5rem;
-      }}
-
-      table {{
-        width: 100%;
-        border-collapse: collapse;
-        background: white;
-        border-radius: 0.75rem;
-        overflow: hidden;
-        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
-      }}
-
-      th, td {{
-        padding: 0.75rem 1rem;
-        text-align: left;
-      }}
-
-      th {{
-        background: #0f172a;
-        color: #f5f7fa;
-      }}
-
-      tr:nth-child(even) {{
-        background: #f1f5f9;
-      }}
-
-      .updated {{
-        font-size: 0.9rem;
-        color: #64748b;
-      }}
-
-      footer {{
-        padding: 1rem 1.5rem;
-        text-align: center;
-        background: #1f2933;
-        color: #9aa5b1;
-      }}
-    </style>
-  </head>
-  <body>
-    <header>
-      <h1>Inventory Overview</h1>
-      <p>Snapshot of current pantry stock with best-before details when available.</p>
-{NAVIGATION}
-    </header>
-    <main>
-      <section>
-        <div class="updated" id="inventory-updated">Loading inventory…</div>
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Name</th>
-              <th>Quantity</th>
-              <th>Unit</th>
-              <th>Best Before</th>
-            </tr>
-          </thead>
-          <tbody id="inventory-body">
-          </tbody>
-        </table>
-      </section>
-    </main>
-    <footer>
-      Remy API · GET <code>/inventory</code>
-    </footer>
-    <script>
-      async function loadInventory() {{
-        const body = document.getElementById("inventory-body");
-        const updated = document.getElementById("inventory-updated");
-        body.innerHTML = "";
-        try {{
-          const response = await fetch("/inventory");
-          if (!response.ok) {{
-            throw new Error(`Request failed with status ${{response.status}}`);
-          }}
-          const data = await response.json();
-          if (!Array.isArray(data) || data.length === 0) {{
-            updated.textContent = "No inventory records found.";
-            return;
-          }}
-          const rows = data.map((item) => {{
-            const bestBefore = item.best_before ?? "—";
-            return `<tr>
-              <td>${{item.id ?? "—"}}</td>
-              <td>${{item.name}}</td>
-              <td>${{item.qty ?? item.quantity ?? "—"}}</td>
-              <td>${{item.unit ?? ""}}</td>
-              <td>${{bestBefore}}</td>
-            </tr>`;
-          }});
-          body.innerHTML = rows.join("");
-          updated.textContent = `Showing ${{data.length}} items.`;
-        }} catch (error) {{
-          updated.textContent = `Error loading inventory: ${{error}}`;
-        }}
-      }}
-
-      loadInventory();
-    </script>
-  </body>
-</html>
-"""
+PREFERENCES_PAGE = load_template("preferences.html").replace("__NAVIGATION__", NAVIGATION)
 
 router = APIRouter(include_in_schema=False)
 
 
 @router.get("/", response_class=HTMLResponse)
 def ui_home() -> str:
-    """Serve the Remy web UI."""
+    """Serve the Remy planner workspace."""
 
     return HTML_PAGE
 
@@ -436,3 +57,10 @@ def inventory_view() -> str:
     """Serve an HTML view of the current inventory."""
 
     return INVENTORY_PAGE
+
+
+@router.get("/preferences/view", response_class=HTMLResponse)
+def preferences_view() -> str:
+    """Serve the preferences management page."""
+
+    return PREFERENCES_PAGE

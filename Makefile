@@ -20,7 +20,7 @@ PORT ?= 8000
 DURATION ?=
 COMPOSE ?= docker-compose
 
-.PHONY: install install-dev install-server test test-e2e lint typecheck format run-server docker-build docker-run clean
+.PHONY: install install-dev install-server test test-e2e lint typecheck format run-server docker-build docker-run compose-up compose-down compose-logs check coverage clean
 
 install:
 	$(PIP) install -e .
@@ -36,6 +36,14 @@ test:
 
 test-e2e:
 	RUN_E2E=1 $(PYTHON) -m pytest tests/e2e
+
+check:
+	$(MAKE) lint
+	$(MAKE) typecheck
+	$(MAKE) test
+
+coverage:
+	$(PYTEST) --cov=src/remy --cov-report=term-missing
 
 lint:
 	$(RUFF) check src tests

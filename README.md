@@ -17,10 +17,11 @@ Remy is a multi-agent automation platform that assembles a daily dinner plan for
 - Execute `remy plan path/to/context.json --pretty` to generate placeholder plans from a context payload.
 - Launch the API with `uvicorn remy.server.app:app --reload` and POST planning contexts to `/plan`.
 - Open `http://localhost:8000/` for the interactive web UI that submits contexts to the API.
-- Build and run a containerized server with `docker build -t remy .` followed by `docker run -p 8000:8000 remy`.
-- Use `make install-dev`, `make test`, or `make run-server` (set `DURATION=5` for a temporary run). The Makefile auto-detects `.venv/bin/python` when present.
+- Build and run a containerized server with `docker build -t remy .` followed by `docker run -p 8000:8000 remy` or `docker-compose up --build -d`.
+- Use `make install-dev`, `make test`, `make check`, or `make run-server` (set `DURATION=5` for a temporary run). The Makefile auto-detects `.venv/bin/python` when present.
+- Generate coverage reports with `make coverage` (requires the `dev` extras).
 - Prefer a reproducible environment via `.devcontainer/devcontainer.json` (VS Code Dev Containers / `devcontainer up`) when collaborating.
-- For a deployable stack with persistent SQLite storage, use `docker-compose up --build -d`; data lives in the `remy-data` volume exposed in `docker-compose.yml`.
+- Visit `http://localhost:8000/inventory/view` to manage stock and `http://localhost:8000/preferences/view` to edit dietary constraints/allergens.
 - Run Docker-based end-to-end checks with `RUN_E2E=1 pytest tests/e2e` or `make test-e2e` (Docker & Docker Compose required).
 
 ## System Architecture
@@ -73,6 +74,7 @@ If the planner fails, the system reuses the most recent approved meal as a fallb
 - Next milestone focuses on `/plan/approve` to persist approvals and manage inventory mutations.
 - All persistent data remains local; API tokens should be stored in a `.env` file kept out of version control.
 - SQLite persistence lives at `data/remy.db` by default; the first run seeds `inventory_items` from `inventory_snapshot.json` (or built-in defaults) via the repository layer in `src/remy/db/`.
+- Set `REMY_API_TOKEN` to require authenticated requests for `/plan` and inventory/preferences mutations (Bearer, `X-API-Key`, or `api_token` query support).
 - When using remote LLMs, redact personally identifiable household details.
 
 ## Testing Strategy
@@ -83,6 +85,7 @@ If the planner fails, the system reuses the most recent approved meal as a fallb
 - **API Integration Tests**: Use FastAPI's `TestClient` (see `tests/integration/test_plan_endpoint.py`) to validate dependency overrides and response contracts.
 - **Snapshot Tests**: Run fixed planning contexts to confirm deterministic planner output across revisions.
 - **End-to-End**: Launch the Docker Compose stack and verify the planner endpoint via `tests/e2e/test_compose_plan.py` (requires `RUN_E2E=1`).
+- **Security Tests**: `tests/integration/test_security.py` ensures API token validation gates state-changing endpoints.
 
 ## Roadmap
 
