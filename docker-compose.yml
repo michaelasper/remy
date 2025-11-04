@@ -1,0 +1,27 @@
+version: "3.9"
+
+services:
+  remy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: remy/app:latest
+    restart: unless-stopped
+    environment:
+      REMY_DATABASE_PATH: /app/data/remy.db
+    volumes:
+      - remy-data:/app/data
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS -X POST -H 'Content-Type: application/json' -d '{\"date\":\"1970-01-01\"}' http://127.0.0.1:8000/plan >/dev/null || exit 1",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  remy-data:

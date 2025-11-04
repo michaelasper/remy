@@ -7,7 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # Install runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential && \
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential curl && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy dependency metadata first for better caching
@@ -18,6 +18,13 @@ RUN pip install --upgrade pip setuptools wheel
 # Install project with server extras
 COPY src /app/src
 RUN pip install .[server]
+
+# Create a non-root user and prepare writable directories
+RUN useradd --create-home --shell /bin/bash remy && \
+    mkdir -p /app/data && \
+    chown -R remy:remy /app
+
+USER remy
 
 # Expose default server port
 EXPOSE 8000

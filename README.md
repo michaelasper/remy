@@ -20,6 +20,7 @@ Remy is a multi-agent automation platform that assembles a daily dinner plan for
 - Build and run a containerized server with `docker build -t remy .` followed by `docker run -p 8000:8000 remy`.
 - Use `make install-dev`, `make test`, or `make run-server` (set `DURATION=5` for a temporary run). The Makefile auto-detects `.venv/bin/python` when present.
 - Prefer a reproducible environment via `.devcontainer/devcontainer.json` (VS Code Dev Containers / `devcontainer up`) when collaborating.
+- For a deployable stack with persistent SQLite storage, use `docker compose up --build -d`; data lives in the `remy-data` volume exposed in `docker-compose.yml`.
 
 ## System Architecture
 

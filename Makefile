@@ -18,6 +18,7 @@ DOCKER ?= docker
 HOST ?= 127.0.0.1
 PORT ?= 8000
 DURATION ?=
+COMPOSE ?= docker compose
 
 .PHONY: install install-dev install-server test lint typecheck format run-server docker-build docker-run clean
 
@@ -62,6 +63,29 @@ docker-run:
 		exit 1; \
 	fi
 	$(DOCKER) run --rm -p 8000:8000 $(IMAGE_NAME)
+
+.PHONY: compose-up compose-down compose-logs
+
+compose-up:
+	@if ! command -v $(DOCKER) >/dev/null 2>&1; then \
+		echo "Docker command not found. Install Docker or override DOCKER/COMPOSE."; \
+		exit 1; \
+	fi
+	$(COMPOSE) up -d --build
+
+compose-down:
+	@if ! command -v $(DOCKER) >/dev/null 2>&1; then \
+		echo "Docker command not found. Install Docker or override DOCKER/COMPOSE."; \
+		exit 1; \
+	fi
+	$(COMPOSE) down --remove-orphans
+
+compose-logs:
+	@if ! command -v $(DOCKER) >/dev/null 2>&1; then \
+		echo "Docker command not found. Install Docker or override DOCKER/COMPOSE."; \
+		exit 1; \
+	fi
+	$(COMPOSE) logs -f
 
 clean:
 	rm -rf .pytest_cache .mypy_cache .ruff_cache dist build
