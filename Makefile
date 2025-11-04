@@ -18,7 +18,7 @@ DOCKER ?= docker
 HOST ?= 127.0.0.1
 PORT ?= 8000
 DURATION ?=
-COMPOSE ?= docker compose
+COMPOSE ?= docker-compose
 
 .PHONY: install install-dev install-server test test-e2e lint typecheck format run-server docker-build docker-run clean
 
@@ -70,25 +70,34 @@ docker-run:
 .PHONY: compose-up compose-down compose-logs
 
 compose-up:
-	@if ! command -v $(DOCKER) >/dev/null 2>&1; then \
-		echo "Docker command not found. Install Docker or override DOCKER/COMPOSE."; \
+	@if command -v $(firstword $(COMPOSE)) >/dev/null 2>&1; then \
+		$(COMPOSE) up -d --build; \
+	elif command -v $(DOCKER) >/dev/null 2>&1; then \
+		$(DOCKER) compose up -d --build; \
+	else \
+		echo "Docker Compose not found. Install docker-compose or set COMPOSE to an alternative."; \
 		exit 1; \
 	fi
-	$(COMPOSE) up -d --build
 
 compose-down:
-	@if ! command -v $(DOCKER) >/dev/null 2>&1; then \
-		echo "Docker command not found. Install Docker or override DOCKER/COMPOSE."; \
+	@if command -v $(firstword $(COMPOSE)) >/dev/null 2>&1; then \
+		$(COMPOSE) down --remove-orphans; \
+	elif command -v $(DOCKER) >/dev/null 2>&1; then \
+		$(DOCKER) compose down --remove-orphans; \
+	else \
+		echo "Docker Compose not found. Install docker-compose or set COMPOSE to an alternative."; \
 		exit 1; \
 	fi
-	$(COMPOSE) down --remove-orphans
 
 compose-logs:
-	@if ! command -v $(DOCKER) >/dev/null 2>&1; then \
-		echo "Docker command not found. Install Docker or override DOCKER/COMPOSE."; \
+	@if command -v $(firstword $(COMPOSE)) >/dev/null 2>&1; then \
+		$(COMPOSE) logs -f; \
+	elif command -v $(DOCKER) >/dev/null 2>&1; then \
+		$(DOCKER) compose logs -f; \
+	else \
+		echo "Docker Compose not found. Install docker-compose or set COMPOSE to an alternative."; \
 		exit 1; \
 	fi
-	$(COMPOSE) logs -f
 
 clean:
 	rm -rf .pytest_cache .mypy_cache .ruff_cache dist build

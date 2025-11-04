@@ -15,7 +15,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_FILE = PROJECT_ROOT / "docker-compose.yml"
 DOCKER_ENV = os.environ.get("DOCKER", "docker")
-COMPOSE_ENV = os.environ.get("COMPOSE", "docker compose")
+COMPOSE_ENV = os.environ.get("COMPOSE", "docker-compose")
 DOCKER_EXECUTABLE = shutil.which(DOCKER_ENV.split()[0])
 COMPOSE_EXECUTABLE = shutil.which(COMPOSE_ENV.split()[0])
 
@@ -26,9 +26,7 @@ pytestmark = pytest.mark.skipif(
 
 
 def _compose_command(*args: str) -> list[str]:
-    if COMPOSE_ENV != "docker compose":
-        return COMPOSE_ENV.split() + list(args)
-    return [DOCKER_ENV, "compose", *args]
+    return COMPOSE_ENV.split() + list(args)
 
 
 @pytest.fixture(scope="session")

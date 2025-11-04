@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import Depends, FastAPI
 
 from remy import __version__
-from remy.models.context import PlanningContext
+from remy.models.context import InventoryItem, PlanningContext
 from remy.models.plan import Plan
 from remy.server import deps, ui
 
@@ -25,6 +25,18 @@ def create_app() -> FastAPI:
         """Generate candidate dinner plans from the provided context payload."""
 
         return plan_generator(context)
+
+    @application.get(
+        "/inventory",
+        response_model=list[InventoryItem],
+        summary="List current inventory",
+    )
+    def inventory_endpoint(
+        provider: deps.InventoryProvider = Depends(deps.get_inventory_provider),
+    ) -> list[InventoryItem]:
+        """Return all known inventory items."""
+
+        return provider()
 
     return application
 

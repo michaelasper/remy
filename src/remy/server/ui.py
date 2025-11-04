@@ -22,6 +22,13 @@ SAMPLE_CONTEXT = {
 
 ESCAPED_SAMPLE_CONTEXT = html.escape(json.dumps(SAMPLE_CONTEXT, indent=2))
 
+NAVIGATION = """
+      <nav>
+        <a href="/">Planner</a>
+        <a href="/inventory/view">Inventory</a>
+      </nav>
+"""
+
 HTML_PAGE = f"""<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -50,6 +57,17 @@ HTML_PAGE = f"""<!DOCTYPE html>
       header h1 {{
         margin: 0 0 0.25rem 0;
         font-size: 1.75rem;
+      }}
+
+      nav a {{
+        color: #f5f7fa;
+        text-decoration: none;
+        margin-right: 1rem;
+        font-weight: 600;
+      }}
+
+      nav a:hover {{
+        text-decoration: underline;
       }}
 
       main {{
@@ -141,6 +159,7 @@ HTML_PAGE = f"""<!DOCTYPE html>
     <header>
       <h1>Remy Dinner Planner</h1>
       <p>Craft dinner plans from your pantry inventory and preferences.</p>
+{NAVIGATION}
     </header>
     <main>
       <section>
@@ -216,6 +235,153 @@ HTML_PAGE = f"""<!DOCTYPE html>
 </html>
 """
 
+INVENTORY_PAGE = f"""<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Remy Inventory</title>
+    <style>
+      :root {{
+        color-scheme: light dark;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }}
+
+      body {{
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background: #f8fafc;
+        color: #1f2933;
+      }}
+
+      header {{
+        background: #1f2933;
+        color: #f5f7fa;
+        padding: 1.5rem;
+      }}
+
+      nav a {{
+        color: #f5f7fa;
+        text-decoration: none;
+        margin-right: 1rem;
+        font-weight: 600;
+      }}
+
+      nav a:hover {{
+        text-decoration: underline;
+      }}
+
+      main {{
+        flex: 1;
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+      }}
+
+      table {{
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        border-radius: 0.75rem;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+      }}
+
+      th, td {{
+        padding: 0.75rem 1rem;
+        text-align: left;
+      }}
+
+      th {{
+        background: #0f172a;
+        color: #f5f7fa;
+      }}
+
+      tr:nth-child(even) {{
+        background: #f1f5f9;
+      }}
+
+      .updated {{
+        font-size: 0.9rem;
+        color: #64748b;
+      }}
+
+      footer {{
+        padding: 1rem 1.5rem;
+        text-align: center;
+        background: #1f2933;
+        color: #9aa5b1;
+      }}
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Inventory Overview</h1>
+      <p>Snapshot of current pantry stock with best-before details when available.</p>
+{NAVIGATION}
+    </header>
+    <main>
+      <section>
+        <div class="updated" id="inventory-updated">Loading inventory…</div>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Quantity</th>
+              <th>Unit</th>
+              <th>Best Before</th>
+            </tr>
+          </thead>
+          <tbody id="inventory-body">
+          </tbody>
+        </table>
+      </section>
+    </main>
+    <footer>
+      Remy API · GET <code>/inventory</code>
+    </footer>
+    <script>
+      async function loadInventory() {{
+        const body = document.getElementById("inventory-body");
+        const updated = document.getElementById("inventory-updated");
+        body.innerHTML = "";
+        try {{
+          const response = await fetch("/inventory");
+          if (!response.ok) {{
+            throw new Error(`Request failed with status ${{response.status}}`);
+          }}
+          const data = await response.json();
+          if (!Array.isArray(data) || data.length === 0) {{
+            updated.textContent = "No inventory records found.";
+            return;
+          }}
+          const rows = data.map((item) => {{
+            const bestBefore = item.best_before ?? "—";
+            return `<tr>
+              <td>${{item.id ?? "—"}}</td>
+              <td>${{item.name}}</td>
+              <td>${{item.qty ?? item.quantity ?? "—"}}</td>
+              <td>${{item.unit ?? ""}}</td>
+              <td>${{bestBefore}}</td>
+            </tr>`;
+          }});
+          body.innerHTML = rows.join("");
+          updated.textContent = `Showing ${{data.length}} items.`;
+        }} catch (error) {{
+          updated.textContent = `Error loading inventory: ${{error}}`;
+        }}
+      }}
+
+      loadInventory();
+    </script>
+  </body>
+</html>
+"""
+
 router = APIRouter(include_in_schema=False)
 
 
@@ -224,3 +390,10 @@ def ui_home() -> str:
     """Serve the Remy web UI."""
 
     return HTML_PAGE
+
+
+@router.get("/inventory/view", response_class=HTMLResponse)
+def inventory_view() -> str:
+    """Serve an HTML view of the current inventory."""
+
+    return INVENTORY_PAGE
