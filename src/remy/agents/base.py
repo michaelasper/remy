@@ -15,4 +15,3 @@ class Agent(ABC, Generic[InputT, OutputT]):
     @abstractmethod
     def run(self, payload: InputT) -> OutputT:
         """Execute the agent with the given payload."""
-*** End Patch

@@ -6,7 +6,6 @@ from unittest.mock import Mock
 
 from fastapi import status
 
-from remy.models.plan import Plan
 from remy.server import deps
 
 
@@ -29,4 +28,4 @@ def test_plan_endpoint_validates_payload(client):
 
     response = client.post("/plan", json={"date": "not-a-date"})
 
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT

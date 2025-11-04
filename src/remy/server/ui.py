@@ -74,7 +74,16 @@ HTML_PAGE = f"""<!DOCTYPE html>
       textarea {{
         width: 100%;
         min-height: 320px;
-        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-family:
+          "JetBrains Mono",
+          ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Monaco,
+          Consolas,
+          "Liberation Mono",
+          "Courier New",
+          monospace;
         font-size: 0.9rem;
         padding: 1rem;
         border-radius: 0.5rem;

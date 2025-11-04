@@ -14,7 +14,10 @@ PLACEHOLDER_STEPS = [
 ]
 
 
-def _build_placeholder_candidate(inventory_item: InventoryItem, context: PlanningContext) -> PlanCandidate:
+def _build_placeholder_candidate(
+    inventory_item: InventoryItem,
+    context: PlanningContext,
+) -> PlanCandidate:
     """Create a simple placeholder candidate that exercises the data model."""
     use_amount = min(inventory_item.quantity, 250.0)
     servings = context.constraints.attendees or 2
@@ -26,11 +29,13 @@ def _build_placeholder_candidate(inventory_item: InventoryItem, context: Plannin
         servings=servings,
         steps=list(PLACEHOLDER_STEPS),
         ingredients_required=[
-            IngredientRequirement(ingredient_id=inventory_item.id, name=inventory_item.name, quantity_g=use_amount)
+            IngredientRequirement(
+                ingredient_id=inventory_item.id,
+                name=inventory_item.name,
+                quantity_g=use_amount,
+            )
         ],
-        inventory_deltas=[
-            InventoryDelta(ingredient_id=inventory_item.id, use_g=use_amount)
-        ],
+        inventory_deltas=[InventoryDelta(ingredient_id=inventory_item.id, use_g=use_amount)],
         shopping_shortfall=[],
         macros_per_serving=None,
     )

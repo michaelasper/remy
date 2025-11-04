@@ -7,14 +7,17 @@ from typing import Optional
 
 import typer
 
-from remy.planner.app.planner import generate_plan
 from remy.models.context import PlanningContext
+from remy.planner.app.planner import generate_plan
 
 app = typer.Typer(help="Remy dinner-planning automation commands.")
 
 
 @app.command()
-def plan(context_path: str, pretty: bool = typer.Option(False, "--pretty", help="Pretty-print output JSON.")) -> None:
+def plan(
+    context_path: str,
+    pretty: bool = typer.Option(False, "--pretty", help="Pretty-print output JSON."),
+) -> None:
     """
     Generate dinner plan candidates for the provided planning context JSON file.
     """

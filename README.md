@@ -11,14 +11,15 @@ Remy is a multi-agent automation platform that assembles a daily dinner plan for
 
 ## Getting Started
 
-- Install dependencies with `pip install -e .[dev]` using Python 3.11 or newer.
-- Optionally install server extras with `pip install -e .[server]` to add the Uvicorn ASGI runner.
+- Install Python 3.11 (use `pyenv install 3.11.9` and respect `.python-version`, or spin up `.venv` via `python3 -m venv .venv && source .venv/bin/activate`).
+- Install dependencies with `pip install -e .[dev]` after activating your environment; add server extras with `pip install -e .[server]` if you plan to run Uvicorn directly.
 - Run the smoke test suite with `pytest` to validate the scaffolding.
 - Execute `remy plan path/to/context.json --pretty` to generate placeholder plans from a context payload.
 - Launch the API with `uvicorn remy.server.app:app --reload` and POST planning contexts to `/plan`.
 - Open `http://localhost:8000/` for the interactive web UI that submits contexts to the API.
 - Build and run a containerized server with `docker build -t remy .` followed by `docker run -p 8000:8000 remy`.
-- Use `make install-dev`, `make test`, or `make run-server` for common developer workflows.
+- Use `make install-dev`, `make test`, or `make run-server` (set `DURATION=5` for a temporary run). The Makefile auto-detects `.venv/bin/python` when present.
+- Prefer a reproducible environment via `.devcontainer/devcontainer.json` (VS Code Dev Containers / `devcontainer up`) when collaborating.
 
 ## System Architecture
 
