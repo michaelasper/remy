@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from remy.models.receipt import Receipt, ReceiptOcrResult
 
@@ -239,12 +239,12 @@ def offload_receipt_content(receipt_id: int, *, archive_dir: Path) -> Optional[P
         session.flush()
         return target_path
 def _ensure_receipt_columns(session) -> None:
-    columns = session.execute("PRAGMA table_info(receipts)").fetchall()
+    columns = session.execute(text("PRAGMA table_info(receipts)")).fetchall()
     column_names = {row[1] for row in columns}
     if "content" not in column_names:
-        # legacy schema; nothing to do since content column is required for earlier versions
+        # Legacy schema; nothing to do since content column is required for earlier versions.
         return
     if "content_path" not in column_names:
         session.execute("ALTER TABLE receipts ADD COLUMN content_path TEXT")
-    # ensure nullable state for content column to avoid OperationalError during migrations
-    # SQLite does not support altering column nullability directly, so we rely on new code paths to handle NULLs.
+    # SQLite cannot alter column nullability directly; new code handles NULL
+    # content by reading from archived blobs when necessary.

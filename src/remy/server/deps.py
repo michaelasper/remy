@@ -48,7 +48,10 @@ ReceiptDeleter = Callable[[int], None]
 ReceiptOcrStatusProvider = Callable[[int], ReceiptOcrResult]
 ReceiptOcrProcessor = Callable[[int], ReceiptOcrResult]
 InventorySuggestionProvider = Callable[[], List[InventorySuggestion]]
-InventorySuggestionApprover = Callable[[int, Optional[str], Optional[float], Optional[str]], ReceiptLineItem]
+InventorySuggestionApprover = Callable[
+    [int, Optional[str], Optional[float], Optional[str]],
+    ReceiptLineItem,
+]
 InventorySuggestionDeleter = Callable[[int], None]
 
 

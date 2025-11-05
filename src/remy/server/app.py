@@ -17,19 +17,16 @@ from rapidfuzz import fuzz, process
 
 from remy import __version__
 from remy.config import Settings, get_settings
-from remy.db.inventory import get_inventory_item, list_inventory
-from remy.db.inventory_suggestions import (
-    approve_suggestion,
-    create_suggestion,
-    delete_suggestion,
-    list_suggestions,
-)
+from remy.db.inventory import list_inventory
+from remy.db.inventory_suggestions import create_suggestion
 from remy.db.receipts import update_receipt_ocr
 from remy.logging_utils import configure_logging as configure_app_logging
 from remy.models.context import InventoryItem, PlanningContext, Preferences
 from remy.models.plan import Plan
 from remy.models.receipt import (
     InventorySuggestion as InventorySuggestionModel,
+)
+from remy.models.receipt import (
     Receipt,
     ReceiptLineItem,
     ReceiptOcrResult,
