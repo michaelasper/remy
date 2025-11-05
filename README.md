@@ -15,6 +15,7 @@ Remy is a multi-agent automation platform that assembles a daily dinner plan for
 - Install dependencies with `pip install -e .[dev]` after activating your environment; add server extras with `pip install -e .[server]` if you plan to run Uvicorn directly.
 - Install Tesseract OCR locally (`brew install tesseract` on macOS, `sudo apt-get install tesseract-ocr` on Debian/Ubuntu). The project Docker image installs the same runtime out of the box.
 - Install Poppler utilities for PDF support (`brew install poppler` or `sudo apt-get install poppler-utils`) so `pdf2image` can rasterize multi-page receipts.
+- Configure `REMY_OCR_ARCHIVE_PATH` (defaults to `./data/receipts_archive`) if you want processed receipt blobs archived outside SQLite.
 - Run the smoke test suite with `pytest` to validate the scaffolding.
 - Execute `remy plan path/to/context.json --pretty` to generate placeholder plans from a context payload.
 - Launch the API with `uvicorn remy.server.app:app --reload` and POST planning contexts to `/plan`.
@@ -77,9 +78,10 @@ If the planner fails, the system reuses the most recent approved meal as a fallb
 2. Inspect status via `GET /receipts/{id}/ocr` or the Receipts tab, which now shows progress, confidence, errors, and bounding boxes.
 3. Trigger extraction with the UI “Run OCR” button, `POST /receipts/{id}/ocr`, `remy receipt-ocr <id>`, `make ocr OCR_RECEIPT_ID=<id>`, or let the background worker handle it automatically.
 4. The pipeline (`ReceiptOcrService`) preprocesses each page (grayscale, denoise, deskew), handles multi-page PDFs via `pdf2image`, and persists structured text/metadata (word boxes, per-page confidence) in the `receipt_ocr_results` table.
-5. Run the daemon-style worker (`remy ocr-worker` or enable `REMY_OCR_WORKER_ENABLED=true`) to poll and process staged receipts continuously. Configure cadence with `REMY_OCR_WORKER_POLL_INTERVAL` and `REMY_OCR_WORKER_BATCH_SIZE`.
-6. Parsed metadata now includes store/date heuristics and normalized line items (`metadata.parsed`), with fuzzy-matched inventory IDs when confidence is high.
-7. Review and copy the extracted text directly in the UI; future steps will map the text into inventory upserts.
+5. Run the daemon-style worker (`remy ocr-worker` or enable `REMY_OCR_WORKER_ENABLED=true`) to poll and process staged receipts continuously. APScheduler drives the worker so batches run at `REMY_OCR_WORKER_POLL_INTERVAL` cadence without their own thread.
+6. Parsed metadata now includes store/date heuristics and normalized line items (`metadata.parsed`), with fuzzy-matched inventory IDs when confidence is high. Sensitive number strings (e.g., payment PANs) are masked before persistence.
+7. Raw binaries are compressed to `REMY_OCR_ARCHIVE_PATH` once OCR succeeds so the receipts table stays lean, and the metadata continues to serve the sanitized text.
+8. Review and copy the extracted text directly in the UI; future steps will map the text into inventory upserts.
 
 *Limitations*: ensure Tesseract and Poppler executables are present locally (or run inside the Docker image). Bounding boxes are limited to the first 1,000 words to keep payload sizes manageable.
 

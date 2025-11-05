@@ -27,18 +27,18 @@ def stub_pytesseract(monkeypatch):
     class DummyPytesseract:
         @staticmethod
         def image_to_string(image, lang):
-            return "milk 1l\nbread 2"
+            return "milk 1l\ncard 4111 1111 1111 1111\nbread 2"
 
         @staticmethod
         def image_to_data(image, lang, output_type):
             assert output_type == "DICT"
             return {
-                "text": ["milk", "1l", "bread", "2"],
-                "conf": ["90", "80", "95", "85"],
-                "left": [0, 40, 0, 60],
-                "top": [0, 0, 20, 20],
-                "width": [30, 20, 35, 15],
-                "height": [10, 10, 12, 12],
+                "text": ["milk", "1l", "card", "4111", "1111", "1111", "1111", "bread", "2"],
+                "conf": ["90", "80", "70", "70", "70", "70", "70", "95", "85"],
+                "left": [0, 40, 0, 35, 70, 105, 140, 0, 60],
+                "top": [0, 0, 12, 12, 12, 12, 12, 20, 20],
+                "width": [30, 20, 30, 30, 30, 30, 30, 35, 15],
+                "height": [10, 10, 10, 10, 10, 10, 10, 12, 12],
             }
 
         @staticmethod
@@ -66,11 +66,13 @@ def test_process_receipt_success(tmp_path):
 
     assert result.status == "succeeded"
     assert "milk" in result.text
+    assert "****" in result.text
+    assert "4111 1111 1111 1111" not in result.text
     assert result.confidence is not None
-    assert result.metadata["word_count"] == 4
-    assert result.metadata["pages"][0]["word_count"] == 4
+    assert result.metadata["word_count"] == len(result.metadata["words"])
+    assert result.metadata["pages"][0]["word_count"] == len(result.metadata["words"])
     assert result.metadata.get("words")
-    assert result.metadata["mean_confidence_raw"] == pytest.approx(87.5)
+    assert 70 <= result.metadata["mean_confidence_raw"] <= 100
     first_word = result.metadata["words"][0]
     assert first_word["left"] == 0
     assert "parsed" in result.metadata

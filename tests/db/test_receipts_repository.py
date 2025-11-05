@@ -12,6 +12,7 @@ from remy.db.receipts import (
     fetch_receipt_blob,
     get_receipt_ocr,
     list_receipts,
+    offload_receipt_content,
     store_receipt,
     update_receipt_ocr,
 )
@@ -49,7 +50,7 @@ def test_store_and_list_receipts(isolated_db):
     assert ocr_status.text is None
 
 
-def test_fetch_and_delete_receipt(isolated_db):
+def test_fetch_and_delete_receipt(isolated_db, tmp_path):
     saved = store_receipt(
         filename="receipt.pdf",
         content_type="application/pdf",
@@ -73,7 +74,17 @@ def test_fetch_and_delete_receipt(isolated_db):
     assert status.text == "Milk 1L"
     assert status.metadata == {"word_count": 2}
 
+    archive_dir = tmp_path / "archive"
+    offload_path = offload_receipt_content(saved.id, archive_dir=archive_dir)
+    assert offload_path is not None
+    assert offload_path.exists()
+
+    metadata, blob = fetch_receipt_blob(saved.id)
+    assert metadata.id == saved.id
+    assert blob.startswith(b"%PDF")
+
     delete_receipt(saved.id)
+    assert not offload_path.exists()
 
     with pytest.raises(ValueError):
         get_receipt_ocr(saved.id)

@@ -9,6 +9,7 @@ from typing import Optional
 import typer
 
 from remy.config import get_settings
+from remy.db.receipts import offload_receipt_content
 from remy.models.context import PlanningContext
 from remy.ocr import ReceiptOcrService, ReceiptOcrWorker
 from remy.planner.app.planner import generate_plan
@@ -47,11 +48,17 @@ def receipt_ocr(
     Run OCR against a previously uploaded receipt and display the stored result.
     """
 
+    settings = get_settings()
     service = ReceiptOcrService(lang=lang)
     result = service.process_receipt(receipt_id)
     payload = result.model_dump(mode="json")
     output = json.dumps(payload, indent=2 if pretty else None, sort_keys=pretty)
     typer.echo(output)
+    if result.status == "succeeded":
+        try:
+            offload_receipt_content(receipt_id, archive_dir=settings.ocr_archive_path)
+        except Exception as exc:  # pragma: no cover - CLI warning
+            typer.secho(f"Warning: unable to archive receipt: {exc}", fg=typer.colors.YELLOW)
 
 
 @app.command("ocr-worker")
@@ -71,6 +78,7 @@ def ocr_worker(
         poll_interval=poll_interval or settings.ocr_worker_poll_interval,
         batch_size=batch_size or settings.ocr_worker_batch_size,
         service=ReceiptOcrService(lang=settings.ocr_default_lang),
+        archive_dir=settings.ocr_archive_path,
     )
 
     if once:

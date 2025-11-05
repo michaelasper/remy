@@ -1,0 +1,11 @@
+FRESH MART SUPERCENTER
+123 MARKET AVE
+2025-02-10 18:45
+
+Milk Whole 1L        3.99
+Bananas             2 1.50
+Eggs 12 ct          2.99
+Organic Spinach 0.5kg  4.25
+Subtotal            12.73
+Tax                 0.89
+Total               13.62

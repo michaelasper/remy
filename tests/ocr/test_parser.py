@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date
+from pathlib import Path
+from typing import Any
+
+import pytest
 
 from remy.models.context import InventoryItem
 from remy.ocr.parser import ReceiptParser
+
+FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "receipts"
 
 
 def test_parser_extracts_store_date_and_items():
@@ -51,3 +58,35 @@ Total 9.08
     assert eggs.unit.lower() == "ct"
     assert eggs.quantity == 12
 
+
+@pytest.mark.parametrize("epsilon", [0.05])
+def test_parser_matches_fixture(epsilon: float) -> None:
+    raw_text = (FIXTURES_DIR / "sample_receipt.txt").read_text(encoding="utf-8")
+    expected: dict[str, Any] = json.loads(
+        (FIXTURES_DIR / "sample_receipt_expected.json").read_text(encoding="utf-8")
+    )
+
+    parser = ReceiptParser(fuzzy_threshold=60)
+    result = parser.parse(raw_text)
+
+    assert result.store_name == expected["store_name"]
+    if expected.get("purchase_date"):
+        assert result.purchase_date == date.fromisoformat(expected["purchase_date"])
+    if expected.get("total") is not None and result.total is not None:
+        assert abs(result.total - expected["total"]) <= epsilon
+
+    assert len(result.items) >= len(expected["items"])
+    for expected_item in expected["items"]:
+        match = next(
+            (
+                item
+                for item in result.items
+                if expected_item["name"].lower() in item.name.lower()
+            ),
+            None,
+        )
+        assert match is not None, f"Missing item for {expected_item['name']}"
+        if expected_item.get("total_price") is not None and match.total_price is not None:
+            assert abs(match.total_price - expected_item["total_price"]) <= epsilon
+        if expected_item.get("quantity") is not None and match.quantity is not None:
+            assert abs(match.quantity - expected_item["quantity"]) <= epsilon

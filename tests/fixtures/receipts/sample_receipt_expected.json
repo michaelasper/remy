@@ -1,0 +1,32 @@
+{
+  "store_name": "Fresh Mart Supercenter",
+  "purchase_date": "2025-02-10",
+  "currency": null,
+  "items": [
+    {
+      "name": "Milk Whole",
+      "quantity": null,
+      "unit": null,
+      "total_price": 3.99
+    },
+    {
+      "name": "Bananas",
+      "quantity": 2.0,
+      "unit": null,
+      "total_price": 1.5
+    },
+    {
+      "name": "Eggs",
+      "quantity": 12.0,
+      "unit": "ct",
+      "total_price": 2.99
+    },
+    {
+      "name": "Organic Spinach",
+      "quantity": 0.5,
+      "unit": "kg",
+      "total_price": 4.25
+    }
+  ],
+  "total": 13.62
+}

@@ -25,6 +25,7 @@ from remy.db.receipts import (
 )
 from remy.models.receipt import Receipt, ReceiptOcrResult
 from remy.ocr.parser import ReceiptParser
+from remy.ocr.sanitize import sanitize_text
 
 logger = logging.getLogger(__name__)
 
@@ -230,6 +231,7 @@ class ReceiptOcrService:
             )
 
         text_output = "\n\n".join(entry.strip() for entry in page_texts if entry.strip())
+        text_output = sanitize_text(text_output)
         average_confidence = None
         if page_confidences:
             average_confidence = sum(page_confidences) / len(page_confidences)
@@ -254,7 +256,7 @@ class ReceiptOcrService:
     def _run_ocr_page(
         self, image: Image.Image
     ) -> tuple[str, Optional[float], List[dict[str, object]]]:
-        text = pytesseract.image_to_string(image, lang=self._lang).strip()
+        text = sanitize_text(pytesseract.image_to_string(image, lang=self._lang).strip())
         data = pytesseract.image_to_data(image, lang=self._lang, output_type=Output.DICT)
 
         confidences: List[float] = []
@@ -273,7 +275,7 @@ class ReceiptOcrService:
                 return None
 
         for idx, raw_text in enumerate(texts):
-            normalized_text = (raw_text or "").strip()
+            normalized_text = sanitize_text((raw_text or "").strip())
             raw_conf = confs[idx] if idx < len(confs) else ""
             try:
                 confidence = float(raw_conf)

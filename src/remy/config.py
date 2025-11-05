@@ -54,6 +54,10 @@ class Settings(BaseModel):
         default="eng",
         description="Default Tesseract language code for OCR processing.",
     )
+    ocr_archive_path: Path = Field(
+        default=Path("./data/receipts_archive"),
+        description="Directory used to store archived receipt blobs after OCR.",
+    )
 
     model_config = ConfigDict(frozen=True)
 
@@ -94,6 +98,8 @@ def _load_from_env() -> dict[str, object]:
             pass
     if (ocr_lang := os.environ.get("REMY_OCR_LANG")):
         payload["ocr_default_lang"] = ocr_lang
+    if (archive_path := os.environ.get("REMY_OCR_ARCHIVE_PATH")):
+        payload["ocr_archive_path"] = Path(archive_path)
     return payload
 
 

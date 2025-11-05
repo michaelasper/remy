@@ -91,7 +91,8 @@ class ReceiptORM(Base):
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     content_type: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
-    content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    content: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    content_path: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     uploaded_at: Mapped[datetime] = mapped_column(
         DateTime,

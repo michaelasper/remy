@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import gzip
+import hashlib
 import json
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import select
@@ -122,7 +125,15 @@ def fetch_receipt_blob(receipt_id: int) -> Tuple[Receipt, bytes]:
         if record is None:
             raise ValueError(f"Receipt {receipt_id} not found")
         metadata = _to_receipt_model(record)
-        return metadata, bytes(record.content)
+        if record.content is not None:
+            return metadata, bytes(record.content)
+        if record.content_path:
+            path = Path(record.content_path)
+            if not path.exists():
+                raise ValueError(f"Archived content missing for receipt {receipt_id}")
+            with gzip.open(path, "rb") as handle:
+                return metadata, handle.read()
+        raise ValueError(f"Receipt {receipt_id} has no stored content")
 
 
 def delete_receipt(receipt_id: int) -> None:
@@ -132,6 +143,10 @@ def delete_receipt(receipt_id: int) -> None:
         record = session.get(ReceiptORM, receipt_id)
         if record is None:
             raise ValueError(f"Receipt {receipt_id} not found")
+        if record.content_path:
+            path = Path(record.content_path)
+            if path.exists():
+                path.unlink()
         ocr_record = session.get(ReceiptOcrResultORM, receipt_id)
         if ocr_record is not None:
             session.delete(ocr_record)
@@ -194,3 +209,28 @@ def update_receipt_ocr(
         session.flush()
         session.refresh(record)
         return _to_ocr_model(record)
+
+
+def offload_receipt_content(receipt_id: int, *, archive_dir: Path) -> Optional[Path]:
+    """Persist receipt content to disk and clear the database blob."""
+
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    with session_scope() as session:
+        record = session.get(ReceiptORM, receipt_id)
+        if record is None:
+            raise ValueError(f"Receipt {receipt_id} not found")
+        if record.content is None:
+            if record.content_path:
+                path = Path(record.content_path)
+                return path
+            return None
+
+        digest = hashlib.sha256(record.content).hexdigest()[:16]
+        target_path = archive_dir / f"receipt_{receipt_id}_{digest}.bin.gz"
+        with gzip.open(target_path, "wb") as handle:
+            handle.write(bytes(record.content))
+
+        record.content = None
+        record.content_path = str(target_path)
+        session.flush()
+        return target_path

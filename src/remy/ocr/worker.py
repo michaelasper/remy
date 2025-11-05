@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import logging
 import threading
+from pathlib import Path
 from typing import Callable, List, Optional
 
-from remy.db.receipts import claim_receipts_for_ocr
+from remy.db.receipts import claim_receipts_for_ocr, offload_receipt_content
 from remy.ocr.pipeline import ReceiptOcrService
 
 logger = logging.getLogger(__name__)
@@ -22,11 +23,13 @@ class ReceiptOcrWorker:
         claimer: Callable[[int], List[int]] = claim_receipts_for_ocr,
         poll_interval: float = 5.0,
         batch_size: int = 5,
+        archive_dir: Optional[Path] = None,
     ) -> None:
         self._service = service or ReceiptOcrService()
         self._claimer = claimer
         self._poll_interval = poll_interval
         self._batch_size = batch_size
+        self._archive_dir = archive_dir
         self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
 
@@ -66,7 +69,17 @@ class ReceiptOcrWorker:
         processed = 0
         for receipt_id in receipt_ids:
             try:
-                self._service.process_receipt(receipt_id)
+                result = self._service.process_receipt(receipt_id)
+                if (
+                    self._archive_dir is not None
+                    and result.status == "succeeded"
+                ):
+                    try:
+                        offload_receipt_content(receipt_id, archive_dir=self._archive_dir)
+                    except Exception:  # pragma: no cover - best-effort archival
+                        logger.exception(
+                            "Unable to archive receipt %s after OCR", receipt_id
+                        )
                 processed += 1
             except Exception:  # pragma: no cover - defensive logging
                 logger.exception("OCR processing failed for receipt_id=%s", receipt_id)

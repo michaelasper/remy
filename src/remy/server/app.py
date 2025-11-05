@@ -8,17 +8,8 @@ from time import perf_counter
 from typing import Any, Optional
 from uuid import uuid4
 
-from fastapi import (
-    Body,
-    Depends,
-    FastAPI,
-    File,
-    Form,
-    HTTPException,
-    Request,
-    UploadFile,
-    status,
-)
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from fastapi import Body, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field, ValidationError, model_validator
@@ -80,22 +71,33 @@ def create_app() -> FastAPI:
     application = FastAPI(title="Remy Dinner Planner", version=__version__)
 
     ocr_worker: ReceiptOcrWorker | None = None
+    ocr_scheduler: AsyncIOScheduler | None = None
     if settings.ocr_worker_enabled:
         ocr_worker = ReceiptOcrWorker(
             service=ReceiptOcrService(lang=settings.ocr_default_lang),
             poll_interval=settings.ocr_worker_poll_interval,
             batch_size=settings.ocr_worker_batch_size,
+            archive_dir=settings.ocr_archive_path,
+        )
+        ocr_scheduler = AsyncIOScheduler()
+        ocr_scheduler.add_job(
+            ocr_worker.poll_once,
+            "interval",
+            seconds=settings.ocr_worker_poll_interval,
+            max_instances=1,
+            coalesce=True,
         )
 
         @application.on_event("startup")
         async def start_ocr_worker() -> None:
-            assert ocr_worker is not None
-            ocr_worker.start()
+            assert ocr_scheduler is not None
+            ocr_worker.poll_once()
+            ocr_scheduler.start()
 
         @application.on_event("shutdown")
         async def stop_ocr_worker() -> None:
-            assert ocr_worker is not None
-            ocr_worker.stop()
+            assert ocr_scheduler is not None
+            ocr_scheduler.shutdown(wait=False)
 
     application.include_router(ui.router)
     logger.debug("Application created with log level %s", settings.log_level)
