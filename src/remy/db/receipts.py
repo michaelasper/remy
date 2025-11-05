@@ -82,6 +82,7 @@ def store_receipt(
 
     size_bytes = len(content)
     with session_scope() as session:
+        _ensure_receipt_columns(session)
         record = ReceiptORM(
             filename=filename,
             content_type=content_type,
@@ -99,6 +100,7 @@ def list_receipts() -> List[Receipt]:
     """Return all stored receipts sorted by newest first."""
 
     with session_scope() as session:
+        _ensure_receipt_columns(session)
         rows = (
             session.execute(select(ReceiptORM).order_by(ReceiptORM.uploaded_at.desc()))
             .scalars()
@@ -111,6 +113,7 @@ def fetch_receipt(receipt_id: int) -> Receipt:
     """Return receipt metadata or raise if not found."""
 
     with session_scope() as session:
+        _ensure_receipt_columns(session)
         record = session.get(ReceiptORM, receipt_id)
         if record is None:
             raise ValueError(f"Receipt {receipt_id} not found")
@@ -121,6 +124,7 @@ def fetch_receipt_blob(receipt_id: int) -> Tuple[Receipt, bytes]:
     """Return receipt metadata and raw bytes."""
 
     with session_scope() as session:
+        _ensure_receipt_columns(session)
         record = session.get(ReceiptORM, receipt_id)
         if record is None:
             raise ValueError(f"Receipt {receipt_id} not found")
@@ -234,3 +238,13 @@ def offload_receipt_content(receipt_id: int, *, archive_dir: Path) -> Optional[P
         record.content_path = str(target_path)
         session.flush()
         return target_path
+def _ensure_receipt_columns(session) -> None:
+    columns = session.execute("PRAGMA table_info(receipts)").fetchall()
+    column_names = {row[1] for row in columns}
+    if "content" not in column_names:
+        # legacy schema; nothing to do since content column is required for earlier versions
+        return
+    if "content_path" not in column_names:
+        session.execute("ALTER TABLE receipts ADD COLUMN content_path TEXT")
+    # ensure nullable state for content column to avoid OperationalError during migrations
+    # SQLite does not support altering column nullability directly, so we rely on new code paths to handle NULLs.

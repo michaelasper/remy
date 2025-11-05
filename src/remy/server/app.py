@@ -13,15 +13,27 @@ from fastapi import Body, Depends, FastAPI, File, Form, HTTPException, Request, 
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field, ValidationError, model_validator
+from rapidfuzz import fuzz, process
 
 from remy import __version__
 from remy.config import Settings, get_settings
-from remy.db.inventory import get_inventory_item
+from remy.db.inventory import get_inventory_item, list_inventory
+from remy.db.inventory_suggestions import (
+    approve_suggestion,
+    create_suggestion,
+    delete_suggestion,
+    list_suggestions,
+)
 from remy.db.receipts import update_receipt_ocr
 from remy.logging_utils import configure_logging as configure_app_logging
 from remy.models.context import InventoryItem, PlanningContext, Preferences
 from remy.models.plan import Plan
-from remy.models.receipt import Receipt, ReceiptOcrResult
+from remy.models.receipt import (
+    InventorySuggestion as InventorySuggestionModel,
+    Receipt,
+    ReceiptLineItem,
+    ReceiptOcrResult,
+)
 from remy.ocr import ReceiptOcrService
 from remy.ocr.worker import ReceiptOcrWorker
 from remy.server import deps, ui
@@ -443,8 +455,14 @@ def create_app() -> FastAPI:
 
         metadata = ocr_result.metadata.copy() if ocr_result.metadata else {}
         ingested_records: list[dict[str, Any]] = metadata.get("ingested", [])
+        suggestion_records: list[dict[str, Any]] = metadata.get("suggestions", [])
         ingested: list[dict[str, Any]] = []
         skipped: list[dict[str, Any]] = []
+        suggestions: list[dict[str, Any]] = []
+
+        inventory_snapshot = list_inventory()
+        inventory_by_id = {item.id: item for item in inventory_snapshot if item.id is not None}
+        inventory_choices = [item.name for item in inventory_snapshot if item.id is not None]
 
         for item in request_payload.items:
             quantity = item.quantity
@@ -452,34 +470,55 @@ def create_app() -> FastAPI:
                 skipped.append({"name": item.name, "reason": "invalid_quantity"})
                 continue
 
+            matched_inventory = None
+            match_score: Optional[float] = None
+
             if item.inventory_match_id:
-                existing = get_inventory_item(item.inventory_match_id)
-                if existing is None:
+                matched_inventory = inventory_by_id.get(item.inventory_match_id)
+                if matched_inventory is None:
                     skipped.append({"name": item.name, "reason": "inventory_not_found"})
                     continue
+            else:
+                if inventory_choices:
+                    match = process.extractOne(
+                        item.name,
+                        inventory_choices,
+                        scorer=fuzz.WRatio,
+                    )
+                    if match:
+                        matched_name, score, index = match
+                        match_score = score / 100.0
+                        matched_inventory = inventory_snapshot[index] if index is not None else None
+
+            if matched_inventory is not None and match_score is not None and match_score < 0.85:
+                matched_inventory = None
+
+            if matched_inventory is not None:
                 if quantity is None:
                     skipped.append({"name": item.name, "reason": "missing_quantity"})
                     continue
-                new_quantity = float(existing.qty) + float(quantity)
-                updated = inventory_updater(existing.id, {"quantity": new_quantity})
+                new_quantity = float(matched_inventory.qty) + float(quantity)
+                updated = inventory_updater(matched_inventory.id, {"quantity": new_quantity})
                 ingested.append({"id": updated.id, "action": "updated", "name": updated.name})
                 ingested_records.append({"name": updated.name, "quantity": quantity})
-            else:
-                resolved_quantity = float(quantity) if quantity is not None else 1.0
-                unit = item.unit or "count"
-                created = inventory_creator(
-                    {
-                        "name": item.name,
-                        "quantity": resolved_quantity,
-                        "unit": unit,
-                        "best_before": None,
-                        "notes": item.notes,
-                    }
-                )
-                ingested.append({"id": created.id, "action": "created", "name": created.name})
-                ingested_records.append({"name": created.name, "quantity": resolved_quantity})
+                continue
+
+            if match_score is None:
+                match_score = None
+
+            suggestion = create_suggestion(
+                receipt_id=receipt_id,
+                name=item.name,
+                quantity=quantity,
+                unit=item.unit,
+                confidence=match_score,
+                notes=item.notes,
+            )
+            suggestions.append({"id": suggestion.id, "name": suggestion.name})
+            suggestion_records.append({"id": suggestion.id, "name": suggestion.name})
 
         metadata["ingested"] = ingested_records
+        metadata["suggestions"] = suggestion_records
         update_receipt_ocr(
             receipt_id,
             status=ocr_result.status,
@@ -488,7 +527,62 @@ def create_app() -> FastAPI:
             metadata=metadata,
         )
 
-        return {"ingested": ingested, "skipped": skipped}
+        return {"ingested": ingested, "skipped": skipped, "suggestions": suggestions}
+
+    @application.get(
+        "/inventory/suggestions",
+        response_model=list[InventorySuggestionModel],
+        summary="List pending inventory suggestions",
+    )
+    def inventory_suggestions_list(
+        provider: deps.InventorySuggestionProvider = Depends(
+            deps.get_inventory_suggestion_provider
+        ),
+    ) -> list[InventorySuggestionModel]:
+        return provider()
+
+    @application.post(
+        "/inventory/suggestions/{suggestion_id}/approve",
+        response_model=ReceiptLineItem,
+        summary="Approve an inventory suggestion",
+    )
+    def inventory_suggestion_approve(
+        suggestion_id: int,
+        payload: "InventorySuggestionApproveRequest" = Body(...),
+        auth: None = Depends(deps.require_api_token),
+        approver: deps.InventorySuggestionApprover = Depends(
+            deps.get_inventory_suggestion_approver
+        ),
+    ) -> ReceiptLineItem:
+        try:
+            return approver(
+                suggestion_id,
+                name=payload.name,
+                quantity=payload.quantity,
+                unit=payload.unit,
+            )
+        except ValueError as exc:
+            message = str(exc)
+            if "not found" in message:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=message) from exc
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message) from exc
+
+    @application.delete(
+        "/inventory/suggestions/{suggestion_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        summary="Dismiss an inventory suggestion",
+    )
+    def inventory_suggestion_delete(
+        suggestion_id: int,
+        auth: None = Depends(deps.require_api_token),
+        deleter: deps.InventorySuggestionDeleter = Depends(
+            deps.get_inventory_suggestion_deleter
+        ),
+    ) -> None:
+        try:
+            deleter(suggestion_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     return application
 
@@ -508,6 +602,12 @@ class ReceiptIngestItem(BaseModel):
 
 class ReceiptIngestRequest(BaseModel):
     items: list[ReceiptIngestItem] = Field(default_factory=list, min_length=1)
+
+
+class InventorySuggestionApproveRequest(BaseModel):
+    name: Optional[str] = Field(default=None, max_length=255)
+    quantity: Optional[float] = Field(default=None, gt=0)
+    unit: Optional[str] = Field(default=None, max_length=64)
 
 
 class InventoryCreateRequest(BaseModel):

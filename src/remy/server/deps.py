@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Callable, List, Tuple
+from typing import Callable, List, Optional, Tuple
 
 from fastapi import Depends, HTTPException, Request, status
 
@@ -12,6 +12,11 @@ from remy.db.inventory import (
     delete_inventory_item,
     list_inventory,
     update_inventory_item,
+)
+from remy.db.inventory_suggestions import (
+    approve_suggestion,
+    delete_suggestion,
+    list_suggestions,
 )
 from remy.db.preferences import load_preferences, save_preferences
 from remy.db.receipts import (
@@ -24,7 +29,7 @@ from remy.db.receipts import (
 )
 from remy.models.context import InventoryItem, PlanningContext, Preferences
 from remy.models.plan import Plan
-from remy.models.receipt import Receipt, ReceiptOcrResult
+from remy.models.receipt import InventorySuggestion, Receipt, ReceiptLineItem, ReceiptOcrResult
 from remy.ocr import ReceiptOcrService
 from remy.planner.app.planner import generate_plan
 
@@ -42,6 +47,9 @@ ReceiptBlobFetcher = Callable[[int], Tuple[Receipt, bytes]]
 ReceiptDeleter = Callable[[int], None]
 ReceiptOcrStatusProvider = Callable[[int], ReceiptOcrResult]
 ReceiptOcrProcessor = Callable[[int], ReceiptOcrResult]
+InventorySuggestionProvider = Callable[[], List[InventorySuggestion]]
+InventorySuggestionApprover = Callable[[int, Optional[str], Optional[float], Optional[str]], ReceiptLineItem]
+InventorySuggestionDeleter = Callable[[int], None]
 
 
 def get_plan_generator() -> PlanGenerator:
@@ -109,6 +117,23 @@ def get_receipt_ocr_processor() -> ReceiptOcrProcessor:
     settings = get_settings()
     service = ReceiptOcrService(lang=settings.ocr_default_lang)
     return service.process_receipt
+
+
+def get_inventory_suggestion_provider() -> InventorySuggestionProvider:
+    return list_suggestions
+
+
+def get_inventory_suggestion_approver() -> InventorySuggestionApprover:
+    return lambda suggestion_id, name=None, quantity=None, unit=None: approve_suggestion(
+        suggestion_id,
+        name=name,
+        quantity=quantity,
+        unit=unit,
+    )
+
+
+def get_inventory_suggestion_deleter() -> InventorySuggestionDeleter:
+    return lambda suggestion_id: delete_suggestion(suggestion_id)
 
 
 def require_api_token(

@@ -65,3 +65,19 @@ class ReceiptStructuredData(BaseModel):
     total: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class InventorySuggestion(BaseModel):
+    """Pending inventory suggestion awaiting approval."""
+
+    id: int
+    receipt_id: int
+    name: str
+    normalized_name: str
+    quantity: Optional[float] = None
+    unit: Optional[str] = None
+    confidence: Optional[float] = None
+    notes: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

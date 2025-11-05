@@ -99,8 +99,23 @@ def test_receipt_ingest_endpoint(client):
     )
     assert ingest_response.status_code == status.HTTP_200_OK
     payload = ingest_response.json()
-    assert payload["ingested"]
+    assert not payload["ingested"]
+    assert payload["suggestions"]
+
+    suggestions_response = client.get("/inventory/suggestions")
+    assert suggestions_response.status_code == status.HTTP_200_OK
+    suggestions = suggestions_response.json()
+    assert any(s["name"] == "Test Apples" for s in suggestions)
+
+    suggestion_id = suggestions[0]["id"]
+    approve_response = client.post(
+        f"/inventory/suggestions/{suggestion_id}/approve",
+        json={},
+    )
+    assert approve_response.status_code == status.HTTP_200_OK
+
     inventory_items = client.get("/inventory").json()
     assert any(item["name"] == "Test Apples" for item in inventory_items)
-    ocr_status = client.get(f"/receipts/{receipt_id}/ocr").json()
-    assert ocr_status["metadata"].get("ingested")
+
+    suggestions_after = client.get("/inventory/suggestions").json()
+    assert all(s["id"] != suggestion_id for s in suggestions_after)

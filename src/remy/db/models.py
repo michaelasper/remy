@@ -127,6 +127,26 @@ class ReceiptOcrResultORM(Base):
     )
 
 
+class InventorySuggestionORM(Base):
+    """Pending inventory suggestion derived from OCR parsing."""
+
+    __tablename__ = "inventory_suggestions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    receipt_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    normalized_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    quantity: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    unit: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=func.now(),
+        nullable=False,
+    )
+
+
 __all__ = [
     "Base",
     "InventoryItemORM",
@@ -134,4 +154,5 @@ __all__ = [
     "PreferenceORM",
     "ReceiptORM",
     "ReceiptOcrResultORM",
+    "InventorySuggestionORM",
 ]
