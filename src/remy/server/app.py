@@ -16,6 +16,8 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from remy import __version__
 from remy.config import Settings, get_settings
+from remy.db.inventory import get_inventory_item
+from remy.db.receipts import update_receipt_ocr
 from remy.logging_utils import configure_logging as configure_app_logging
 from remy.models.context import InventoryItem, PlanningContext, Preferences
 from remy.models.plan import Plan
@@ -414,12 +416,100 @@ def create_app() -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
+    @application.post(
+        "/receipts/{receipt_id}/ingest",
+        summary="Approve OCR items into inventory",
+    )
+    def receipts_ingest(
+        receipt_id: int,
+        request_payload: "ReceiptIngestRequest",
+        auth: None = Depends(deps.require_api_token),
+        ocr_provider: deps.ReceiptOcrStatusProvider = Depends(
+            deps.get_receipt_ocr_status_provider
+        ),
+        inventory_creator: deps.InventoryCreator = Depends(deps.get_inventory_creator),
+        inventory_updater: deps.InventoryUpdater = Depends(deps.get_inventory_updater),
+    ) -> dict[str, Any]:
+        if not request_payload.items:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Provide at least one item to ingest.",
+            )
+
+        try:
+            ocr_result = ocr_provider(receipt_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+        metadata = ocr_result.metadata.copy() if ocr_result.metadata else {}
+        ingested_records: list[dict[str, Any]] = metadata.get("ingested", [])
+        ingested: list[dict[str, Any]] = []
+        skipped: list[dict[str, Any]] = []
+
+        for item in request_payload.items:
+            quantity = item.quantity
+            if quantity is not None and quantity <= 0:
+                skipped.append({"name": item.name, "reason": "invalid_quantity"})
+                continue
+
+            if item.inventory_match_id:
+                existing = get_inventory_item(item.inventory_match_id)
+                if existing is None:
+                    skipped.append({"name": item.name, "reason": "inventory_not_found"})
+                    continue
+                if quantity is None:
+                    skipped.append({"name": item.name, "reason": "missing_quantity"})
+                    continue
+                new_quantity = float(existing.qty) + float(quantity)
+                updated = inventory_updater(existing.id, {"quantity": new_quantity})
+                ingested.append({"id": updated.id, "action": "updated", "name": updated.name})
+                ingested_records.append({"name": updated.name, "quantity": quantity})
+            else:
+                resolved_quantity = float(quantity) if quantity is not None else 1.0
+                unit = item.unit or "count"
+                created = inventory_creator(
+                    {
+                        "name": item.name,
+                        "quantity": resolved_quantity,
+                        "unit": unit,
+                        "best_before": None,
+                        "notes": item.notes,
+                    }
+                )
+                ingested.append({"id": created.id, "action": "created", "name": created.name})
+                ingested_records.append({"name": created.name, "quantity": resolved_quantity})
+
+        metadata["ingested"] = ingested_records
+        update_receipt_ocr(
+            receipt_id,
+            status=ocr_result.status,
+            text=ocr_result.text,
+            confidence=ocr_result.confidence,
+            metadata=metadata,
+        )
+
+        return {"ingested": ingested, "skipped": skipped}
+
     return application
 
 
 app = create_app()
 
 __all__ = ["app", "create_app"]
+
+
+class ReceiptIngestItem(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    quantity: Optional[float] = Field(default=None, gt=0)
+    unit: Optional[str] = Field(default=None, max_length=64)
+    inventory_match_id: Optional[int] = Field(default=None, ge=1)
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
+class ReceiptIngestRequest(BaseModel):
+    items: list[ReceiptIngestItem] = Field(default_factory=list, min_length=1)
+
+
 class InventoryCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     quantity: float = Field(gt=0)

@@ -80,8 +80,9 @@ If the planner fails, the system reuses the most recent approved meal as a fallb
 4. The pipeline (`ReceiptOcrService`) preprocesses each page (grayscale, denoise, deskew), handles multi-page PDFs via `pdf2image`, and persists structured text/metadata (word boxes, per-page confidence) in the `receipt_ocr_results` table.
 5. Run the daemon-style worker (`remy ocr-worker` or enable `REMY_OCR_WORKER_ENABLED=true`) to poll and process staged receipts continuously. APScheduler drives the worker so batches run at `REMY_OCR_WORKER_POLL_INTERVAL` cadence without their own thread.
 6. Parsed metadata now includes store/date heuristics and normalized line items (`metadata.parsed`), with fuzzy-matched inventory IDs when confidence is high. Sensitive number strings (e.g., payment PANs) are masked before persistence.
-7. Raw binaries are compressed to `REMY_OCR_ARCHIVE_PATH` once OCR succeeds so the receipts table stays lean, and the metadata continues to serve the sanitized text.
-8. Review and copy the extracted text directly in the UI; future steps will map the text into inventory upserts.
+7. Use the Receipts tab to review parsed line items: tweak names/quantities, deselect anything irrelevant, and click **Approve Selected** to add/update inventory via the new `/receipts/{id}/ingest` endpoint.
+8. Raw binaries are compressed to `REMY_OCR_ARCHIVE_PATH` once OCR succeeds so the receipts table stays lean, and the metadata continues to serve the sanitized text.
+9. Review and copy the extracted text directly in the UI for auditing.
 
 *Limitations*: ensure Tesseract and Poppler executables are present locally (or run inside the Docker image). Bounding boxes are limited to the first 1,000 words to keep payload sizes manageable.
 

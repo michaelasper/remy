@@ -532,6 +532,95 @@
                         v-if="receipt.ocr && receipt.ocr.text && isReceiptExpanded(receipt.id)"
                         class="mt-3 max-h-48 overflow-auto rounded-lg bg-slate-950/70 p-3 text-xs leading-5 text-slate-100"
                       >{{ receipt.ocr.text }}</pre>
+                      <div
+                        v-if="parsedItems(receipt).length"
+                        class="mt-4 space-y-4 rounded-lg border border-slate-800 bg-slate-950/50 p-4"
+                      >
+                        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <h5 class="text-sm font-semibold text-slate-200">Parsed Items</h5>
+                            <p class="text-xs text-slate-400">
+                              Approve items to add or update inventory. Edit quantities or names before submitting.
+                            </p>
+                          </div>
+                          <button
+                            @click="approveReceiptItems(receipt)"
+                            :disabled="receipts.submitting[receipt.id]"
+                            class="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <span class="i-lucide-plus"></span>
+                            <span>{{ receipts.submitting[receipt.id] ? "Saving…" : "Approve Selected" }}</span>
+                          </button>
+                        </div>
+                        <div
+                          v-if="ingestedItems(receipt).length"
+                          class="rounded-lg border border-green-500/30 bg-green-500/10 p-3 text-xs text-green-100"
+                        >
+                          <strong class="text-green-200">Previously ingested:</strong>
+                          <span>
+                            {{ ingestedItems(receipt).map((entry) => `${entry.name} (${entry.quantity ?? '—'})`).join(", ") }}
+                          </span>
+                        </div>
+                        <div class="space-y-3">
+                          <div
+                            v-for="(item, index) in receiptSelection(receipt.id)"
+                            :key="index"
+                            class="rounded-lg border border-slate-800 bg-slate-900/70 p-3"
+                          >
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <label class="flex items-start gap-3 text-sm text-slate-200">
+                                <input type="checkbox" v-model="item.selected" class="mt-1 h-4 w-4 rounded border-slate-700 bg-slate-900" />
+                                <span>Include</span>
+                              </label>
+                              <div class="grid flex-1 gap-3 sm:grid-cols-4">
+                                <div class="flex flex-col gap-1 sm:col-span-2">
+                                  <label class="text-xs uppercase tracking-wide text-slate-400">Name</label>
+                                  <input
+                                    v-model="item.name"
+                                    type="text"
+                                    class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                                  />
+                                  <p v-if="item.inventory_match_name" class="text-xs text-primary-200">
+                                    Suggested match: {{ item.inventory_match_name }}
+                                  </p>
+                                </div>
+                                <div class="flex flex-col gap-1">
+                                  <label class="text-xs uppercase tracking-wide text-slate-400">Quantity</label>
+                                  <input
+                                    v-model.number="item.quantity"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                                  />
+                                </div>
+                                <div class="flex flex-col gap-1">
+                                  <label class="text-xs uppercase tracking-wide text-slate-400">Unit</label>
+                                  <input
+                                    v-model="item.unit"
+                                    type="text"
+                                    class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                                  />
+                                </div>
+                                <div class="flex flex-col gap-1">
+                                  <label class="text-xs uppercase tracking-wide text-slate-400">Notes</label>
+                                  <input
+                                    v-model="item.notes"
+                                    type="text"
+                                    class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            <p v-if="item.raw?.confidence != null" class="mt-2 text-xs text-slate-400">
+                              Confidence: {{ Math.round(item.raw.confidence * 100) }}%
+                            </p>
+                            <p class="mt-1 text-xs text-slate-500">
+                              Raw: {{ item.raw?.raw_text || item.raw?.name || "—" }}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -597,6 +686,8 @@
               upload: { file: null, notes: "" },
               processing: {},
               expanded: {},
+              selections: {},
+              submitting: {},
             },
           };
         },
@@ -903,6 +994,8 @@
             this.receipts.loading = true;
             this.receipts.status = "Loading receipts…";
             this.receipts.statusColor = "text-slate-300";
+            this.receipts.selections = {};
+            this.receipts.submitting = {};
             try {
               const response = await fetch("/receipts");
               if (!response.ok) {
@@ -917,6 +1010,9 @@
                 })
               );
               this.receipts.items = enriched;
+              for (const entry of enriched) {
+                this.receipts.selections[entry.id] = this.initializeReceiptSelection(entry);
+              }
               this.receipts.status = `Loaded ${this.receipts.items.length} receipt(s).`;
               this.receipts.statusColor = "text-slate-300";
             } catch (error) {
@@ -925,6 +1021,38 @@
             } finally {
               this.receipts.loading = false;
             }
+          },
+          parsedItems(receipt) {
+            return (
+              receipt?.ocr?.metadata?.parsed?.items &&
+              Array.isArray(receipt.ocr.metadata.parsed.items)
+                ? receipt.ocr.metadata.parsed.items
+                : []
+            );
+          },
+          ingestedItems(receipt) {
+            const metadata = receipt?.ocr?.metadata;
+            if (!metadata?.ingested || !Array.isArray(metadata.ingested)) {
+              return [];
+            }
+            return metadata.ingested;
+          },
+          initializeReceiptSelection(receipt) {
+            const parsed = this.parsedItems(receipt);
+            return parsed.map((item) => ({
+              raw: item,
+              selected: (item.confidence ?? 0) >= 0.5,
+              name: item.name || "",
+              quantity: item.quantity != null ? Number(item.quantity) : null,
+              unit: item.unit || "",
+              inventory_match_id:
+                item.inventory_match_id != null ? Number(item.inventory_match_id) : null,
+              inventory_match_name: item.inventory_match_name || null,
+              notes: "",
+            }));
+          },
+          receiptSelection(receiptId) {
+            return this.receipts.selections[receiptId] || [];
           },
           async fetchReceiptOcr(receiptId) {
             try {
@@ -960,6 +1088,10 @@
             this.receipts.items = this.receipts.items.map((entry) =>
               entry.id === receiptId ? { ...entry, ocr } : entry
             );
+            const updated = this.receipts.items.find((entry) => entry.id === receiptId);
+            if (updated) {
+              this.receipts.selections[receiptId] = this.initializeReceiptSelection(updated);
+            }
           },
           async uploadReceipt() {
             if (!this.receipts.upload.file) {
@@ -1026,6 +1158,52 @@
               this.receipts.processing = copy;
             }
           },
+          async approveReceiptItems(receipt) {
+            const selection = this.receiptSelection(receipt.id);
+            const items = selection
+              .filter((item) => item.selected)
+              .map((item) => ({
+                name: item.name.trim(),
+                quantity:
+                  item.quantity != null && item.quantity !== ""
+                    ? Number(item.quantity)
+                    : null,
+                unit: item.unit ? item.unit.trim() : null,
+                inventory_match_id: item.inventory_match_id || null,
+                notes: item.notes?.trim() ? item.notes.trim() : null,
+              }));
+
+            if (!items.length) {
+              this.receipts.status = "Select at least one item to ingest.";
+              this.receipts.statusColor = "text-red-300";
+              return;
+            }
+
+            this.receipts.submitting = { ...this.receipts.submitting, [receipt.id]: true };
+            this.receipts.status = `Ingesting ${items.length} item(s)…`;
+            this.receipts.statusColor = "text-primary-300";
+            try {
+              const response = await fetch(`/receipts/${receipt.id}/ingest`, {
+                method: "POST",
+                headers: this.authHeaders({ "Content-Type": "application/json" }),
+                body: JSON.stringify({ items }),
+              });
+              if (!response.ok) {
+                const detail = await response.json().catch(() => ({}));
+                throw new Error(detail?.detail || `Status ${response.status}`);
+              }
+              await Promise.all([this.loadInventory(), this.loadReceipts()]);
+              this.receipts.status = "Receipt items ingested into inventory.";
+              this.receipts.statusColor = "text-green-300";
+            } catch (error) {
+              this.receipts.status = `Error ingesting items: ${error.message}`;
+              this.receipts.statusColor = "text-red-300";
+            } finally {
+              const copy = { ...this.receipts.submitting };
+              delete copy[receipt.id];
+              this.receipts.submitting = copy;
+            }
+          },
           async deleteReceipt(receipt) {
             if (!window.confirm(`Delete receipt ${receipt.filename}?`)) {
               return;
@@ -1047,6 +1225,12 @@
               const processing = { ...this.receipts.processing };
               delete processing[receipt.id];
               this.receipts.processing = processing;
+              const selections = { ...this.receipts.selections };
+              delete selections[receipt.id];
+              this.receipts.selections = selections;
+              const submitting = { ...this.receipts.submitting };
+              delete submitting[receipt.id];
+              this.receipts.submitting = submitting;
               await this.loadReceipts();
             } catch (error) {
               this.receipts.status = `Error deleting receipt: ${error.message}`;

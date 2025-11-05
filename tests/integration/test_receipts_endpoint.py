@@ -63,3 +63,44 @@ def test_receipt_ocr_endpoints(client):
     assert process_response.status_code == status.HTTP_200_OK
     assert process_response.json()["status"] == "succeeded"
     client.app.dependency_overrides.pop(deps.get_receipt_ocr_processor, None)
+
+
+def test_receipt_ingest_endpoint(client):
+    files = {"file": ("ingest.png", b"\x89PNG\r\n\x1a\n", "image/png")}
+    upload_response = client.post("/receipts", files=files)
+    receipt_id = upload_response.json()["id"]
+
+    update_receipt_ocr(
+        receipt_id,
+        status="succeeded",
+        text="Parsed",
+        confidence=0.85,
+        metadata={
+            "parsed": {
+                "items": [
+                    {
+                        "name": "Test Apples",
+                        "quantity": 2.0,
+                        "unit": "kg",
+                        "confidence": 0.9,
+                    }
+                ]
+            }
+        },
+    )
+
+    ingest_response = client.post(
+        f"/receipts/{receipt_id}/ingest",
+        json={
+            "items": [
+                {"name": "Test Apples", "quantity": 2.0, "unit": "kg", "inventory_match_id": None}
+            ]
+        },
+    )
+    assert ingest_response.status_code == status.HTTP_200_OK
+    payload = ingest_response.json()
+    assert payload["ingested"]
+    inventory_items = client.get("/inventory").json()
+    assert any(item["name"] == "Test Apples" for item in inventory_items)
+    ocr_status = client.get(f"/receipts/{receipt_id}/ocr").json()
+    assert ocr_status["metadata"].get("ingested")

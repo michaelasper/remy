@@ -23,7 +23,7 @@ Create a daily dinner-planning automation that:
 | Diff & Validator | Canonicalize ingredients, compute shortages. | Planner output, inventory | Normalized plan + `shopping_shortfall` | Placeholder; needs schema + diff logic. |
 | Approvals Orchestrator | Handle human approval, dispatch updates. | Normalized plan | Meal + inventory mutations | To be built once DB writes exist. |
 | Shopping Dispatcher | Push shortages to shopping services. | `shopping_shortfall` | HA API calls, future vendor carts | Stubbed. |
-| Receipt Ingestor | Parse receipts/OCR -> inventory updates. | Images/CSV/email, `/receipts` uploads | Inventory upserts | Stores uploads in SQLite, drives the Tesseract OCR pipeline, and can be fed by the background worker; inventory reconciliation is the next milestone. |
+| Receipt Ingestor | Parse receipts/OCR -> inventory updates. | Images/CSV/email, `/receipts` uploads | Inventory upserts | Stores uploads in SQLite, drives the Tesseract OCR pipeline, and now supports operator approval to ingest parsed line items into inventory. |
 | Nutrition Estimator | Compute macros per serving. | Candidate ingredients | `macros_per_serving` | Optional extension. |
 | Notifier | Deliver plan + follow-ups to humans. | Message payloads | Home Assistant notifications / push | Stubbed.
 
