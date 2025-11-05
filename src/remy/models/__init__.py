@@ -16,6 +16,7 @@ from remy.models.plan import (
     PlanCandidate,
     ShoppingShortfall,
 )
+from remy.models.receipt import Receipt, ReceiptLineItem, ReceiptOcrResult, ReceiptStructuredData
 
 __all__ = [
     "Constraints",
@@ -30,4 +31,8 @@ __all__ = [
     "Plan",
     "PlanCandidate",
     "ShoppingShortfall",
+    "Receipt",
+    "ReceiptLineItem",
+    "ReceiptOcrResult",
+    "ReceiptStructuredData",
 ]

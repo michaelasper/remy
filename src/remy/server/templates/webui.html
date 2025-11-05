@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Remy Control Center</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: {
+                50: "#eef2ff",
+                100: "#e0e7ff",
+                200: "#c7d2fe",
+                300: "#a5b4fc",
+                400: "#818cf8",
+                500: "#6366f1",
+                600: "#4f46e5",
+                700: "#4338ca",
+                800: "#3730a3",
+                900: "#312e81",
+              },
+            },
+          },
+        },
+      };
+    </script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  </head>
+  <body class="min-h-screen bg-slate-950 text-slate-100 selection:bg-primary-500/40">
+    <script type="application/json" id="sample-context">__SAMPLE_CONTEXT__</script>
+    <div id="app" class="min-h-screen flex flex-col">
+      <header
+        class="bg-slate-900/70 border-b border-slate-800 backdrop-blur-lg sticky top-0 z-30"
+      >
+        <div class="max-w-6xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-4">
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 class="text-2xl font-semibold text-white">Remy Control Center</h1>
+              <p class="text-sm text-slate-300">
+                Manage dinner planning context, pantry inventory, preferences, and receipts.
+              </p>
+            </div>
+            <div class="flex items-center gap-3">
+              <button
+                @click="promptToken"
+                class="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700"
+              >
+                <span class="i-lucide-key"></span>
+                <span>{{ token ? "Update API Token" : "Set API Token" }}</span>
+              </button>
+              <button
+                @click="refreshAll"
+                class="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700"
+              >
+                <span class="i-lucide-refresh-cw"></span>
+                <span>Refresh Data</span>
+              </button>
+            </div>
+          </div>
+          <nav class="flex flex-wrap gap-2 overflow-x-auto hide-scrollbar">
+            <button
+              v-for="tab in tabs"
+              :key="tab.id"
+              @click="setTab(tab.id)"
+              class="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition"
+              :class="currentTab === tab.id
+                ? 'bg-primary-600 text-white shadow-lg shadow-primary-900/40'
+                : 'bg-slate-800/70 text-slate-200 hover:bg-slate-700'"
+            >
+              <span class="text-base">{{ tab.icon }}</span>
+              <span>{{ tab.label }}</span>
+            </button>
+          </nav>
+        </div>
+      </header>
+
+      <main class="flex-1 w-full">
+        <div class="max-w-6xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+          <!-- Planner -->
+          <section
+            v-if="currentTab === 'planner'"
+            class="rounded-2xl border border-slate-800 bg-slate-900/60 shadow-2xl shadow-primary-900/10 backdrop-blur-sm"
+          >
+            <div class="grid gap-6 p-6 lg:grid-cols-2">
+              <div class="flex flex-col gap-4">
+                <header>
+                  <h2 class="text-xl font-semibold text-white">Planning Context</h2>
+                  <p class="text-sm text-slate-300">
+                    Adjust the context JSON and generate fresh dinner plans.
+                  </p>
+                </header>
+                <textarea
+                  v-model="planner.context"
+                  spellcheck="false"
+                  class="min-h-[320px] flex-1 rounded-xl border border-slate-800 bg-slate-950/70 p-4 font-mono text-sm leading-6 text-slate-100 shadow-inner focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                ></textarea>
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p class="text-sm" :class="planner.statusColor">{{ planner.status }}</p>
+                  <button
+                    @click="generatePlan"
+                    :disabled="planner.loading"
+                    class="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-500 disabled:cursor-not-allowed disabled:bg-primary-900"
+                  >
+                    <span class="i-lucide-wand-2"></span>
+                    <span>{{ planner.loading ? "Generating…" : "Generate Plan" }}</span>
+                  </button>
+                </div>
+              </div>
+              <div class="flex flex-col gap-4">
+                <header>
+                  <h3 class="text-xl font-semibold text-white">Plan Response</h3>
+                  <p class="text-sm text-slate-300">
+                    The latest plan payload from Remy's planner endpoint.
+                  </p>
+                </header>
+                <div
+                  class="min-h-[320px] flex-1 rounded-xl border border-slate-800 bg-slate-950/70 p-4 font-mono text-sm leading-6 text-slate-100 shadow-inner overflow-auto"
+                >
+                  <pre v-if="formattedPlan" class="whitespace-pre-wrap break-words">{{ formattedPlan }}</pre>
+                  <p v-else class="text-slate-400">
+                    Waiting for plan… Generate a plan to view the response.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Inventory -->
+          <section
+            v-if="currentTab === 'inventory'"
+            class="rounded-2xl border border-slate-800 bg-slate-900/60 shadow-2xl shadow-primary-900/10 backdrop-blur-sm"
+          >
+            <div class="grid gap-6 p-6 lg:grid-cols-2">
+              <div class="flex flex-col gap-4">
+                <header>
+                  <h2 class="text-xl font-semibold text-white">Add Inventory Item</h2>
+                  <p class="text-sm text-slate-300">
+                    Track pantry items and update quantities as you cook.
+                  </p>
+                </header>
+                <form @submit.prevent="createInventoryItem" class="grid gap-4">
+                  <div class="flex flex-col gap-2">
+                    <label class="text-sm font-medium text-slate-200">Item Name</label>
+                    <input
+                      v-model="inventory.form.name"
+                      type="text"
+                      required
+                      class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                      placeholder="e.g., canned tomatoes"
+                    />
+                  </div>
+                  <div class="grid gap-4 sm:grid-cols-2">
+                    <div class="flex flex-col gap-2">
+                      <label class="text-sm font-medium text-slate-200">Quantity</label>
+                      <input
+                        v-model="inventory.form.quantity"
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        required
+                        class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                        placeholder="4"
+                      />
+                    </div>
+                    <div class="flex flex-col gap-2">
+                      <label class="text-sm font-medium text-slate-200">Unit</label>
+                      <input
+                        v-model="inventory.form.unit"
+                        type="text"
+                        required
+                        class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                        placeholder="can"
+                      />
+                    </div>
+                  </div>
+                  <div class="flex flex-col gap-2">
+                    <label class="text-sm font-medium text-slate-200">Best Before (optional)</label>
+                    <input
+                      v-model="inventory.form.best_before"
+                      type="date"
+                      class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                    />
+                  </div>
+                  <div class="flex flex-col gap-2">
+                    <label class="text-sm font-medium text-slate-200">Notes (optional)</label>
+                    <textarea
+                      v-model="inventory.form.notes"
+                      rows="2"
+                      class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                      placeholder="Any additional notes…"
+                    ></textarea>
+                  </div>
+                  <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p class="text-sm" :class="inventory.statusColor">{{ inventory.status }}</p>
+                    <button
+                      type="submit"
+                      :disabled="inventory.loading"
+                      class="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-500 disabled:cursor-not-allowed disabled:bg-primary-900"
+                    >
+                      <span class="i-lucide-plus"></span>
+                      <span>{{ inventory.loading ? "Saving…" : "Add Item" }}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+              <div class="flex flex-col gap-4">
+                <header class="flex items-center justify-between">
+                  <div>
+                    <h3 class="text-xl font-semibold text-white">Inventory Items</h3>
+                    <p class="text-sm text-slate-300">
+                      Edit quantities inline or remove items you no longer track.
+                    </p>
+                  </div>
+                  <button
+                    @click="loadInventory"
+                    class="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700"
+                  >
+                    <span class="i-lucide-refresh-cw"></span>
+                    <span>Reload</span>
+                  </button>
+                </header>
+                <div v-if="inventory.items.length === 0" class="rounded-xl border border-dashed border-slate-700 bg-slate-900/40 p-6 text-center text-sm text-slate-300">
+                  No inventory items yet. Add your first ingredient to get started.
+                </div>
+                <div v-else class="grid gap-4">
+                  <div
+                    v-for="item in inventory.items"
+                    :key="item.id"
+                    class="rounded-xl border border-slate-800 bg-slate-950/60 p-4 shadow-lg shadow-slate-900/30"
+                  >
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div class="space-y-2">
+                        <div class="flex items-center gap-2">
+                          <span class="rounded-lg bg-primary-600/20 px-2 py-0.5 text-xs font-medium text-primary-100">#{{ item.id }}</span>
+                          <h4 class="text-base font-semibold text-white">{{ item.name }}</h4>
+                        </div>
+                        <div class="grid gap-2 sm:grid-cols-3">
+                          <label class="flex flex-col gap-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                            Quantity
+                            <input
+                              v-model="item.editQuantity"
+                              type="number"
+                              min="0"
+                              step="0.1"
+                              class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                            />
+                          </label>
+                          <div class="flex flex-col gap-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                            Unit
+                            <div class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200">
+                              {{ item.unit || "—" }}
+                            </div>
+                          </div>
+                          <div class="flex flex-col gap-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                            Best Before
+                            <div class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200">
+                              {{ item.best_before || "—" }}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="flex gap-2">
+                        <button
+                          @click="updateInventoryItem(item)"
+                          class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-primary-500"
+                        >
+                          <span class="i-lucide-save"></span>
+                          <span>Save</span>
+                        </button>
+                        <button
+                          @click="deleteInventoryItem(item)"
+                          class="inline-flex items-center gap-2 rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-200 transition hover:bg-red-500/20"
+                        >
+                          <span class="i-lucide-trash"></span>
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Preferences -->
+          <section
+            v-if="currentTab === 'preferences'"
+            class="rounded-2xl border border-slate-800 bg-slate-900/60 shadow-2xl shadow-primary-900/10 backdrop-blur-sm"
+          >
+            <div class="grid gap-6 p-6 lg:grid-cols-[2fr,3fr]">
+              <div class="flex flex-col gap-4">
+                <header>
+                  <h2 class="text-xl font-semibold text-white">Household Preferences</h2>
+                  <p class="text-sm text-slate-300">
+                    Set dietary preferences, prep time constraints, and allergen information.
+                  </p>
+                </header>
+                <form @submit.prevent="savePreferences" class="grid gap-4">
+                  <div class="flex flex-col gap-2">
+                    <label class="text-sm font-medium text-slate-200">Dietary Preference</label>
+                    <input
+                      v-model="preferences.form.diet"
+                      type="text"
+                      class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                      placeholder="e.g., vegetarian"
+                    />
+                  </div>
+                  <div class="flex flex-col gap-2">
+                    <label class="text-sm font-medium text-slate-200">Max Prep Time (minutes)</label>
+                    <input
+                      v-model.number="preferences.form.max_time_min"
+                      type="number"
+                      min="0"
+                      max="240"
+                      class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                      placeholder="e.g., 45"
+                    />
+                  </div>
+                  <div class="flex flex-col gap-2">
+                    <label class="text-sm font-medium text-slate-200">Allergens (comma-separated)</label>
+                    <textarea
+                      v-model="preferences.form.allergensText"
+                      rows="3"
+                      class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                      placeholder="peanut, shellfish"
+                    ></textarea>
+                  </div>
+                  <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p class="text-sm" :class="preferences.statusColor">{{ preferences.status }}</p>
+                    <button
+                      type="submit"
+                      :disabled="preferences.loading"
+                      class="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-500 disabled:cursor-not-allowed disabled:bg-primary-900"
+                    >
+                      <span class="i-lucide-save"></span>
+                      <span>{{ preferences.loading ? "Saving…" : "Save Preferences" }}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+              <div class="flex flex-col gap-4">
+                <header>
+                  <h3 class="text-lg font-semibold text-white">Current Preferences</h3>
+                  <p class="text-sm text-slate-300">
+                    Live snapshot pulled from the Remy API.
+                  </p>
+                </header>
+                <dl class="grid gap-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
+                  <div>
+                    <dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">Diet</dt>
+                    <dd class="text-sm text-slate-100">{{ preferences.view.diet || "—" }}</dd>
+                  </div>
+                  <div>
+                    <dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Max Prep Time
+                    </dt>
+                    <dd class="text-sm text-slate-100">
+                      {{ preferences.view.max_time_min != null ? preferences.view.max_time_min + " min" : "—" }}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Allergens
+                    </dt>
+                    <dd class="text-sm text-slate-100">
+                      {{ preferences.view.allergens && preferences.view.allergens.length
+                        ? preferences.view.allergens.join(", ")
+                        : "—" }}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+          </section>
+
+          <!-- Receipts -->
+          <section
+            v-if="currentTab === 'receipts'"
+            class="rounded-2xl border border-slate-800 bg-slate-900/60 shadow-2xl shadow-primary-900/10 backdrop-blur-sm"
+          >
+            <div class="grid gap-6 p-6 lg:grid-cols-2">
+              <div class="flex flex-col gap-4">
+                <header>
+                  <h2 class="text-xl font-semibold text-white">Upload Receipt</h2>
+                  <p class="text-sm text-slate-300">
+                    Store grocery receipts for local OCR processing and inventory ingestion.
+                  </p>
+                </header>
+                <form id="receipt-form" @submit.prevent="uploadReceipt" class="grid gap-4">
+                  <div class="flex flex-col gap-2">
+                    <label class="text-sm font-medium text-slate-200">Receipt File</label>
+                    <input
+                      @change="handleReceiptFile"
+                      type="file"
+                      accept="image/*,application/pdf"
+                      required
+                      class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                    />
+                  </div>
+                  <div class="flex flex-col gap-2">
+                    <label class="text-sm font-medium text-slate-200">Notes (optional)</label>
+                    <textarea
+                      v-model="receipts.upload.notes"
+                      rows="2"
+                      class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                      placeholder="Weekly grocery run"
+                    ></textarea>
+                  </div>
+                  <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p class="text-sm" :class="receipts.statusColor">{{ receipts.status }}</p>
+                    <button
+                      type="submit"
+                      :disabled="receipts.loading"
+                      class="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-500 disabled:cursor-not-allowed disabled:bg-primary-900"
+                    >
+                      <span class="i-lucide-upload"></span>
+                      <span>{{ receipts.loading ? "Uploading…" : "Upload Receipt" }}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+              <div class="flex flex-col gap-4">
+                <header class="flex items-center justify-between">
+                  <div>
+                    <h3 class="text-lg font-semibold text-white">Stored Receipts</h3>
+                    <p class="text-sm text-slate-300">
+                      Download originals or review metadata before OCR parsing.
+                    </p>
+                  </div>
+                  <button
+                    @click="loadReceipts"
+                    class="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700"
+                  >
+                    <span class="i-lucide-refresh-cw"></span>
+                    <span>Reload</span>
+                  </button>
+                </header>
+                <div v-if="receipts.items.length === 0" class="rounded-xl border border-dashed border-slate-700 bg-slate-900/40 p-6 text-center text-sm text-slate-300">
+                  No receipts uploaded yet. Add a receipt to start OCR ingestion.
+                </div>
+                <div v-else class="grid gap-4">
+                  <div
+                    v-for="receipt in receipts.items"
+                    :key="receipt.id"
+                    class="rounded-xl border border-slate-800 bg-slate-950/60 p-4 shadow-lg shadow-slate-900/30 space-y-4"
+                  >
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div class="space-y-2">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <span class="rounded-lg bg-primary-600/20 px-2 py-0.5 text-xs font-medium text-primary-100">#{{ receipt.id }}</span>
+                          <h4 class="text-base font-semibold text-white">{{ receipt.filename }}</h4>
+                        </div>
+                        <dl class="grid gap-2 text-sm text-slate-300">
+                          <div class="flex gap-2">
+                            <dt class="min-w-[90px] text-xs font-semibold uppercase tracking-wide text-slate-400">Size</dt>
+                            <dd>{{ formatSize(receipt.size_bytes) }}</dd>
+                          </div>
+                          <div class="flex gap-2">
+                            <dt class="min-w-[90px] text-xs font-semibold uppercase tracking-wide text-slate-400">Uploaded</dt>
+                            <dd>{{ formatDateTime(receipt.uploaded_at) }}</dd>
+                          </div>
+                          <div class="flex gap-2">
+                            <dt class="min-w-[90px] text-xs font-semibold uppercase tracking-wide text-slate-400">Notes</dt>
+                            <dd>{{ receipt.notes || "—" }}</dd>
+                          </div>
+                        </dl>
+                      </div>
+                      <div class="flex flex-wrap gap-2">
+                        <a
+                          :href="`/receipts/${receipt.id}/download`"
+                          class="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-100 transition hover:bg-slate-800"
+                        >
+                          <span class="i-lucide-download"></span>
+                          <span>Download</span>
+                        </a>
+                        <button
+                          @click="runReceiptOcr(receipt)"
+                          :disabled="isReceiptProcessing(receipt.id)"
+                          class="inline-flex items-center gap-2 rounded-lg border border-primary-600/50 bg-primary-600/20 px-3 py-2 text-sm font-semibold text-primary-100 transition hover:bg-primary-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <span class="i-lucide-scan-text"></span>
+                          <span>{{ isReceiptProcessing(receipt.id) ? "Processing…" : "Run OCR" }}</span>
+                        </button>
+                        <button
+                          v-if="receipt.ocr && receipt.ocr.text"
+                          @click="toggleReceiptExpansion(receipt.id)"
+                          class="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-100 transition hover:bg-slate-800"
+                        >
+                          <span :class="isReceiptExpanded(receipt.id) ? 'i-lucide-eye-off' : 'i-lucide-eye'"></span>
+                          <span>{{ isReceiptExpanded(receipt.id) ? "Hide Text" : "View Text" }}</span>
+                        </button>
+                        <button
+                          @click="deleteReceipt(receipt)"
+                          class="inline-flex items-center gap-2 rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-200 transition hover:bg-red-500/20"
+                        >
+                          <span class="i-lucide-trash"></span>
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="rounded-lg border border-slate-800 bg-slate-900/50 p-3">
+                      <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div class="space-y-1">
+                          <p class="text-sm text-slate-200">
+                            <span class="text-xs uppercase tracking-wide text-slate-400">Status</span>
+                            <span class="ml-2 font-medium" :class="ocrStatusClass(receipt.ocr?.status)">
+                              {{ ocrStatusLabel(receipt.ocr?.status) }}
+                            </span>
+                          </p>
+                          <p v-if="receipt.ocr && receipt.ocr.confidence != null" class="text-sm text-slate-300">
+                            Confidence: {{ formatConfidence(receipt.ocr.confidence) }}
+                          </p>
+                          <p v-if="receipt.ocr && receipt.ocr.metadata?.word_count" class="text-xs text-slate-400">
+                            Words detected: {{ receipt.ocr.metadata.word_count }}
+                          </p>
+                          <p v-if="receipt.ocr && receipt.ocr.error_message" class="text-xs text-red-300">
+                            Error: {{ receipt.ocr.error_message }}
+                          </p>
+                        </div>
+                        <div
+                          v-if="receipt.ocr && receipt.ocr.text && !isReceiptExpanded(receipt.id)"
+                          class="text-xs text-slate-400 sm:max-w-xs"
+                        >
+                          <span class="font-semibold text-slate-300">Preview:</span>
+                          <span>{{ summarizeOcrText(receipt.ocr.text) }}</span>
+                        </div>
+                      </div>
+                      <pre
+                        v-if="receipt.ocr && receipt.ocr.text && isReceiptExpanded(receipt.id)"
+                        class="mt-3 max-h-48 overflow-auto rounded-lg bg-slate-950/70 p-3 text-xs leading-5 text-slate-100"
+                      >{{ receipt.ocr.text }}</pre>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+
+      <footer class="border-t border-slate-800 bg-slate-900/80 backdrop-blur-lg">
+        <div class="max-w-6xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-4 text-center text-xs text-slate-400">
+          Remy API &middot; Planner, Inventory, Preferences, Receipts &middot; Built with Vue 3 + Tailwind
+        </div>
+      </footer>
+    </div>
+
+    <script>
+      const SAMPLE_CONTEXT = JSON.parse(
+        document.getElementById("sample-context").textContent || "{}"
+      );
+
+      const app = Vue.createApp({
+        data() {
+          return {
+            tabs: [
+              { id: "planner", label: "Planner", icon: "✨" },
+              { id: "inventory", label: "Inventory", icon: "🧺" },
+              { id: "preferences", label: "Preferences", icon: "⚙️" },
+              { id: "receipts", label: "Receipts", icon: "🧾" },
+            ],
+            currentTab: "planner",
+            token: window.localStorage.getItem("remy_api_token") || "",
+            planner: {
+              context: JSON.stringify(SAMPLE_CONTEXT, null, 2),
+              plan: null,
+              status: "Ready to generate a plan.",
+              statusColor: "text-slate-300",
+              loading: false,
+            },
+            preferences: {
+              form: {
+                diet: "",
+                max_time_min: null,
+                allergensText: "",
+              },
+              view: { diet: null, max_time_min: null, allergens: [] },
+              status: "Loading preferences…",
+              statusColor: "text-slate-300",
+              loading: false,
+            },
+            inventory: {
+              items: [],
+              form: { name: "", quantity: "", unit: "g", best_before: "", notes: "" },
+              status: "Loading inventory…",
+              statusColor: "text-slate-300",
+              loading: false,
+            },
+            receipts: {
+              items: [],
+              status: "Loading receipts…",
+              statusColor: "text-slate-300",
+              loading: false,
+              upload: { file: null, notes: "" },
+              processing: {},
+              expanded: {},
+            },
+          };
+        },
+        computed: {
+          formattedPlan() {
+            return this.planner.plan
+              ? JSON.stringify(this.planner.plan, null, 2)
+              : "";
+          },
+        },
+        methods: {
+          setTab(tab) {
+            this.currentTab = tab;
+          },
+          promptToken() {
+            const current = this.token || "";
+            const next = window.prompt("Enter API token (leave blank to clear)", current);
+            if (next === null) {
+              return;
+            }
+            const trimmed = next.trim();
+            this.token = trimmed;
+            if (trimmed) {
+              window.localStorage.setItem("remy_api_token", trimmed);
+            } else {
+              window.localStorage.removeItem("remy_api_token");
+            }
+          },
+          authHeaders(base = {}) {
+            if (this.token) {
+              return { ...base, Authorization: `Bearer ${this.token}` };
+            }
+            return base;
+          },
+          formatSize(bytes) {
+            if (bytes >= 1024 * 1024) {
+              return `${(bytes / (1024 * 1024)).toFixed(2)} MiB`;
+            }
+            if (bytes >= 1024) {
+              return `${(bytes / 1024).toFixed(1)} KiB`;
+            }
+            return `${bytes} B`;
+          },
+          formatDateTime(value) {
+            try {
+              return new Date(value).toLocaleString();
+            } catch (error) {
+              return value;
+            }
+          },
+          formatConfidence(value) {
+            if (value == null) {
+              return "—";
+            }
+            return `${Math.round(value * 100)}%`;
+          },
+          ocrStatusLabel(status) {
+            const map = {
+              pending: "Pending",
+              processing: "Processing",
+              succeeded: "Completed",
+              failed: "Failed",
+            };
+            return map[status] || "Unknown";
+          },
+          ocrStatusClass(status) {
+            switch (status) {
+              case "succeeded":
+                return "text-green-300";
+              case "processing":
+                return "text-primary-200";
+              case "failed":
+                return "text-red-300";
+              default:
+                return "text-slate-300";
+            }
+          },
+          summarizeOcrText(text) {
+            if (!text) {
+              return "";
+            }
+            const normalized = text.replace(/\s+/g, " ").trim();
+            if (normalized.length <= 140) {
+              return normalized;
+            }
+            return `${normalized.slice(0, 137)}…`;
+          },
+          async refreshAll() {
+            await Promise.all([
+              this.loadPreferences(),
+              this.loadInventory(),
+              this.loadReceipts(),
+            ]);
+          },
+          async generatePlan() {
+            this.planner.loading = true;
+            this.planner.status = "Generating plan…";
+            this.planner.statusColor = "text-primary-300";
+            try {
+              let payload;
+              try {
+                payload = JSON.parse(this.planner.context);
+              } catch (error) {
+                throw new Error("Context must be valid JSON.");
+              }
+              const response = await fetch("/plan", {
+                method: "POST",
+                headers: this.authHeaders({ "Content-Type": "application/json" }),
+                body: JSON.stringify(payload),
+              });
+              if (!response.ok) {
+                const detail = await response.text();
+                throw new Error(`Planner request failed (${response.status}): ${detail}`);
+              }
+              this.planner.plan = await response.json();
+              this.planner.status = "Plan generated successfully.";
+              this.planner.statusColor = "text-green-300";
+            } catch (error) {
+              this.planner.plan = null;
+              this.planner.status = `Error: ${error.message}`;
+              this.planner.statusColor = "text-red-300";
+            } finally {
+              this.planner.loading = false;
+            }
+          },
+          async loadPreferences() {
+            this.preferences.loading = true;
+            this.preferences.status = "Loading preferences…";
+            this.preferences.statusColor = "text-slate-300";
+            try {
+              const response = await fetch("/preferences");
+              if (!response.ok) {
+                throw new Error(`Failed to load preferences (${response.status})`);
+              }
+              const data = await response.json();
+              this.preferences.view = data;
+              this.preferences.form = {
+                diet: data.diet || "",
+                max_time_min: data.max_time_min ?? null,
+                allergensText: Array.isArray(data.allergens)
+                  ? data.allergens.join(", ")
+                  : "",
+              };
+              this.preferences.status = "Preferences loaded.";
+              this.preferences.statusColor = "text-slate-300";
+            } catch (error) {
+              this.preferences.status = `Error loading preferences: ${error.message}`;
+              this.preferences.statusColor = "text-red-300";
+            } finally {
+              this.preferences.loading = false;
+            }
+          },
+          async savePreferences() {
+            this.preferences.loading = true;
+            this.preferences.status = "Saving preferences…";
+            this.preferences.statusColor = "text-primary-300";
+            try {
+              const payload = {
+                diet: this.preferences.form.diet.trim() || null,
+                max_time_min:
+                  this.preferences.form.max_time_min !== null &&
+                  this.preferences.form.max_time_min !== ""
+                    ? Number(this.preferences.form.max_time_min)
+                    : null,
+                allergens: this.preferences.form.allergensText
+                  .split(",")
+                  .map((value) => value.trim())
+                  .filter(Boolean),
+              };
+              const response = await fetch("/preferences", {
+                method: "PUT",
+                headers: this.authHeaders({ "Content-Type": "application/json" }),
+                body: JSON.stringify(payload),
+              });
+              if (!response.ok) {
+                const detail = await response.json().catch(() => ({}));
+                throw new Error(
+                  detail?.detail ? JSON.stringify(detail.detail) : `Status ${response.status}`
+                );
+              }
+              this.preferences.status = "Preferences saved.";
+              this.preferences.statusColor = "text-green-300";
+              await this.loadPreferences();
+            } catch (error) {
+              this.preferences.status = `Error saving preferences: ${error.message}`;
+              this.preferences.statusColor = "text-red-300";
+            } finally {
+              this.preferences.loading = false;
+            }
+          },
+          async loadInventory() {
+            this.inventory.loading = true;
+            this.inventory.status = "Loading inventory…";
+            this.inventory.statusColor = "text-slate-300";
+            try {
+              const response = await fetch("/inventory");
+              if (!response.ok) {
+                throw new Error(`Failed to load inventory (${response.status})`);
+              }
+              const data = await response.json();
+              this.inventory.items = (Array.isArray(data) ? data : []).map((item) => ({
+                ...item,
+                editQuantity:
+                  item.qty ?? item.quantity ?? item.quantity ?? 0,
+              }));
+              this.inventory.status = `Loaded ${this.inventory.items.length} item(s).`;
+              this.inventory.statusColor = "text-slate-300";
+            } catch (error) {
+              this.inventory.status = `Error loading inventory: ${error.message}`;
+              this.inventory.statusColor = "text-red-300";
+            } finally {
+              this.inventory.loading = false;
+            }
+          },
+          async createInventoryItem() {
+            const form = this.inventory.form;
+            if (!form.name.trim()) {
+              this.inventory.status = "Name is required.";
+              this.inventory.statusColor = "text-red-300";
+              return;
+            }
+            const quantity = Number(form.quantity);
+            if (!Number.isFinite(quantity) || quantity <= 0) {
+              this.inventory.status = "Quantity must be greater than zero.";
+              this.inventory.statusColor = "text-red-300";
+              return;
+            }
+            this.inventory.loading = true;
+            try {
+              const payload = {
+                name: form.name.trim(),
+                quantity,
+                unit: form.unit.trim() || "g",
+                best_before: form.best_before || null,
+                notes: form.notes.trim() || null,
+              };
+              const response = await fetch("/inventory", {
+                method: "POST",
+                headers: this.authHeaders({ "Content-Type": "application/json" }),
+                body: JSON.stringify(payload),
+              });
+              if (!response.ok) {
+                const detail = await response.json().catch(() => ({}));
+                throw new Error(detail?.detail || `Status ${response.status}`);
+              }
+              this.inventory.status = "Item added to inventory.";
+              this.inventory.statusColor = "text-green-300";
+              this.inventory.form = { name: "", quantity: "", unit: "g", best_before: "", notes: "" };
+              await this.loadInventory();
+            } catch (error) {
+              this.inventory.status = `Error saving item: ${error.message}`;
+              this.inventory.statusColor = "text-red-300";
+            } finally {
+              this.inventory.loading = false;
+            }
+          },
+          async updateInventoryItem(item) {
+            const quantity = Number(item.editQuantity);
+            if (!Number.isFinite(quantity) || quantity <= 0) {
+              this.inventory.status = "Quantity must be a positive number.";
+              this.inventory.statusColor = "text-red-300";
+              return;
+            }
+            try {
+              const response = await fetch(`/inventory/${item.id}`, {
+                method: "PUT",
+                headers: this.authHeaders({ "Content-Type": "application/json" }),
+                body: JSON.stringify({ quantity }),
+              });
+              if (!response.ok) {
+                const detail = await response.json().catch(() => ({}));
+                throw new Error(detail?.detail || `Status ${response.status}`);
+              }
+              this.inventory.status = "Inventory item updated.";
+              this.inventory.statusColor = "text-green-300";
+              await this.loadInventory();
+            } catch (error) {
+              this.inventory.status = `Error updating item: ${error.message}`;
+              this.inventory.statusColor = "text-red-300";
+            }
+          },
+          async deleteInventoryItem(item) {
+            if (!window.confirm(`Delete ${item.name}?`)) {
+              return;
+            }
+            try {
+              const response = await fetch(`/inventory/${item.id}`, {
+                method: "DELETE",
+                headers: this.authHeaders(),
+              });
+              if (!response.ok) {
+                const detail = await response.json().catch(() => ({}));
+                throw new Error(detail?.detail || `Status ${response.status}`);
+              }
+              this.inventory.status = "Inventory item deleted.";
+              this.inventory.statusColor = "text-green-300";
+              await this.loadInventory();
+            } catch (error) {
+              this.inventory.status = `Error deleting item: ${error.message}`;
+              this.inventory.statusColor = "text-red-300";
+            }
+          },
+          async loadReceipts() {
+            this.receipts.loading = true;
+            this.receipts.status = "Loading receipts…";
+            this.receipts.statusColor = "text-slate-300";
+            try {
+              const response = await fetch("/receipts");
+              if (!response.ok) {
+                throw new Error(`Failed to load receipts (${response.status})`);
+              }
+              const data = await response.json();
+              const items = Array.isArray(data) ? data : [];
+              const enriched = await Promise.all(
+                items.map(async (entry) => {
+                  const ocr = await this.fetchReceiptOcr(entry.id);
+                  return { ...entry, ocr };
+                })
+              );
+              this.receipts.items = enriched;
+              this.receipts.status = `Loaded ${this.receipts.items.length} receipt(s).`;
+              this.receipts.statusColor = "text-slate-300";
+            } catch (error) {
+              this.receipts.status = `Error loading receipts: ${error.message}`;
+              this.receipts.statusColor = "text-red-300";
+            } finally {
+              this.receipts.loading = false;
+            }
+          },
+          async fetchReceiptOcr(receiptId) {
+            try {
+              const response = await fetch(`/receipts/${receiptId}/ocr`);
+              if (!response.ok) {
+                const detail = await response.json().catch(() => ({}));
+                throw new Error(detail?.detail || `Status ${response.status}`);
+              }
+              return await response.json();
+            } catch (error) {
+              return {
+                receipt_id: receiptId,
+                status: "failed",
+                error_message: error.message,
+                metadata: { reason: "status-unavailable" },
+              };
+            }
+          },
+          handleReceiptFile(event) {
+            const [file] = event.target.files || [];
+            this.receipts.upload.file = file || null;
+          },
+          isReceiptProcessing(receiptId) {
+            return Boolean(this.receipts.processing[receiptId]);
+          },
+          isReceiptExpanded(receiptId) {
+            return Boolean(this.receipts.expanded[receiptId]);
+          },
+          toggleReceiptExpansion(receiptId) {
+            this.receipts.expanded[receiptId] = !this.isReceiptExpanded(receiptId);
+          },
+          updateReceiptOcr(receiptId, ocr) {
+            this.receipts.items = this.receipts.items.map((entry) =>
+              entry.id === receiptId ? { ...entry, ocr } : entry
+            );
+          },
+          async uploadReceipt() {
+            if (!this.receipts.upload.file) {
+              this.receipts.status = "Select a receipt file first.";
+              this.receipts.statusColor = "text-red-300";
+              return;
+            }
+            this.receipts.loading = true;
+            this.receipts.status = "Uploading receipt…";
+            this.receipts.statusColor = "text-primary-300";
+            try {
+              const formData = new FormData();
+              formData.append("file", this.receipts.upload.file);
+              if (this.receipts.upload.notes.trim()) {
+                formData.append("notes", this.receipts.upload.notes.trim());
+              }
+              const response = await fetch("/receipts", {
+                method: "POST",
+                headers: this.authHeaders(),
+                body: formData,
+              });
+              if (!response.ok) {
+                const detail = await response.json().catch(() => ({}));
+                throw new Error(detail?.detail || `Status ${response.status}`);
+              }
+              this.receipts.status = "Receipt uploaded.";
+              this.receipts.statusColor = "text-green-300";
+              this.receipts.upload = { file: null, notes: "" };
+              const form = document.getElementById("receipt-form");
+              if (form) {
+                form.reset();
+              }
+              await this.loadReceipts();
+            } catch (error) {
+              this.receipts.status = `Error uploading receipt: ${error.message}`;
+              this.receipts.statusColor = "text-red-300";
+            } finally {
+              this.receipts.loading = false;
+            }
+          },
+          async runReceiptOcr(receipt) {
+            this.receipts.processing = { ...this.receipts.processing, [receipt.id]: true };
+            this.receipts.status = `Running OCR for ${receipt.filename}…`;
+            this.receipts.statusColor = "text-primary-300";
+            try {
+              const response = await fetch(`/receipts/${receipt.id}/ocr`, {
+                method: "POST",
+                headers: this.authHeaders(),
+              });
+              if (!response.ok) {
+                const detail = await response.json().catch(() => ({}));
+                throw new Error(detail?.detail || `Status ${response.status}`);
+              }
+              const ocr = await response.json();
+              this.updateReceiptOcr(receipt.id, ocr);
+              this.receipts.status = "OCR processing complete.";
+              this.receipts.statusColor = "text-green-300";
+            } catch (error) {
+              this.receipts.status = `Error running OCR: ${error.message}`;
+              this.receipts.statusColor = "text-red-300";
+            } finally {
+              const copy = { ...this.receipts.processing };
+              delete copy[receipt.id];
+              this.receipts.processing = copy;
+            }
+          },
+          async deleteReceipt(receipt) {
+            if (!window.confirm(`Delete receipt ${receipt.filename}?`)) {
+              return;
+            }
+            try {
+              const response = await fetch(`/receipts/${receipt.id}`, {
+                method: "DELETE",
+                headers: this.authHeaders(),
+              });
+              if (!response.ok) {
+                const detail = await response.json().catch(() => ({}));
+                throw new Error(detail?.detail || `Status ${response.status}`);
+              }
+              this.receipts.status = "Receipt deleted.";
+              this.receipts.statusColor = "text-green-300";
+              const expanded = { ...this.receipts.expanded };
+              delete expanded[receipt.id];
+              this.receipts.expanded = expanded;
+              const processing = { ...this.receipts.processing };
+              delete processing[receipt.id];
+              this.receipts.processing = processing;
+              await this.loadReceipts();
+            } catch (error) {
+              this.receipts.status = `Error deleting receipt: ${error.message}`;
+              this.receipts.statusColor = "text-red-300";
+            }
+          },
+        },
+        mounted() {
+          this.refreshAll();
+        },
+      });
+
+      app.mount("#app");
+    </script>
+    <style>
+      .hide-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .hide-scrollbar {
+        scrollbar-width: none;
+      }
+      .i-lucide-key::before {
+        content: "🔐";
+      }
+      .i-lucide-refresh-cw::before {
+        content: "🔄";
+      }
+      .i-lucide-wand-2::before {
+        content: "🪄";
+      }
+      .i-lucide-save::before {
+        content: "💾";
+      }
+      .i-lucide-plus::before {
+        content: "➕";
+      }
+      .i-lucide-trash::before {
+        content: "🗑️";
+      }
+      .i-lucide-upload::before {
+        content: "⬆️";
+      }
+      .i-lucide-download::before {
+        content: "⬇️";
+      }
+      .i-lucide-scan-text::before {
+        content: "📝";
+      }
+      .i-lucide-eye::before {
+        content: "👁️";
+      }
+      .i-lucide-eye-off::before {
+        content: "🙈";
+      }
+    </style>
+  </body>
+</html>

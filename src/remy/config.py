@@ -30,8 +30,36 @@ class Settings(BaseModel):
         description="Bearer token required for authenticated endpoints.",
     )
     log_level: str = Field(default="INFO", description="Logging level (DEBUG/INFO/WARNING/ERROR)")
+    log_format: str = Field(
+        default="plain",
+        description="Logging format (plain/json).",
+    )
+    log_requests: bool = Field(
+        default=True,
+        description="Emit request access logs when true.",
+    )
+    ocr_worker_enabled: bool = Field(
+        default=False,
+        description="Run the background OCR worker when true.",
+    )
+    ocr_worker_poll_interval: float = Field(
+        default=5.0,
+        description="Seconds between OCR worker polling iterations.",
+    )
+    ocr_worker_batch_size: int = Field(
+        default=5,
+        description="Maximum number of receipts to claim per OCR worker iteration.",
+    )
+    ocr_default_lang: str = Field(
+        default="eng",
+        description="Default Tesseract language code for OCR processing.",
+    )
 
     model_config = ConfigDict(frozen=True)
+
+
+def _coerce_bool(value: str) -> bool:
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _load_from_env() -> dict[str, object]:
@@ -48,6 +76,24 @@ def _load_from_env() -> dict[str, object]:
         payload["api_token"] = api_token
     if (log_level := os.environ.get("REMY_LOG_LEVEL")):
         payload["log_level"] = log_level
+    if (log_format := os.environ.get("REMY_LOG_FORMAT")):
+        payload["log_format"] = log_format
+    if (log_requests := os.environ.get("REMY_LOG_REQUESTS")):
+        payload["log_requests"] = _coerce_bool(log_requests)
+    if (ocr_worker_enabled := os.environ.get("REMY_OCR_WORKER_ENABLED")):
+        payload["ocr_worker_enabled"] = _coerce_bool(ocr_worker_enabled)
+    if (ocr_worker_poll_interval := os.environ.get("REMY_OCR_WORKER_POLL_INTERVAL")):
+        try:
+            payload["ocr_worker_poll_interval"] = float(ocr_worker_poll_interval)
+        except ValueError:
+            pass
+    if (ocr_worker_batch_size := os.environ.get("REMY_OCR_WORKER_BATCH_SIZE")):
+        try:
+            payload["ocr_worker_batch_size"] = int(ocr_worker_batch_size)
+        except ValueError:
+            pass
+    if (ocr_lang := os.environ.get("REMY_OCR_LANG")):
+        payload["ocr_default_lang"] = ocr_lang
     return payload
 
 

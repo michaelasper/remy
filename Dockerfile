@@ -7,7 +7,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # Install runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential curl && \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        curl \
+        tesseract-ocr \
+        tesseract-ocr-eng \
+    && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy dependency metadata first for better caching

@@ -19,8 +19,9 @@ HOST ?= 127.0.0.1
 PORT ?= 8000
 DURATION ?=
 COMPOSE ?= docker-compose
+DEVTOOLS ?= $(PYTHON) -m remy.devtools
 
-.PHONY: install install-dev install-server test test-e2e lint typecheck format run-server docker-build docker-run compose-up compose-down compose-logs check coverage clean
+.PHONY: install install-dev install-server test test-e2e lint typecheck format run-server docker-build docker-run compose-up compose-down compose-logs check coverage clean bootstrap doctor ocr ocr-worker
 
 install:
 	$(PIP) install -e .
@@ -38,6 +39,7 @@ test-e2e:
 	RUN_E2E=1 $(PYTHON) -m pytest tests/e2e
 
 check:
+	$(MAKE) doctor
 	$(MAKE) lint
 	$(MAKE) typecheck
 	$(MAKE) test
@@ -107,5 +109,24 @@ compose-logs:
 		exit 1; \
 	fi
 
+bootstrap:
+	$(DEVTOOLS) bootstrap
+
+doctor:
+	$(DEVTOOLS) doctor
+
 clean:
 	rm -rf .pytest_cache .mypy_cache .ruff_cache dist build
+
+OCR_RECEIPT_ID ?=
+OCR_LANG ?= eng
+
+ocr:
+	@if [ -z "$(OCR_RECEIPT_ID)" ]; then \
+		echo "Set OCR_RECEIPT_ID=<receipt-id> to run OCR on a stored receipt."; \
+		exit 1; \
+	fi
+	$(PYTHON) -m remy.cli receipt-ocr $(OCR_RECEIPT_ID) --lang $(OCR_LANG)
+
+ocr-worker:
+	$(PYTHON) -m remy.cli ocr-worker $(ARGS)

@@ -19,8 +19,8 @@ def test_inventory_view_serves_html(client):
     response = client.get("/inventory/view")
 
     assert response.status_code == status.HTTP_200_OK
-    assert "Inventory Overview" in response.text
-    assert "GET <code>/inventory</code>" in response.text
+    assert "Remy Control Center" in response.text
+    assert "Add Inventory Item" in response.text
 
 
 def test_inventory_create_update_delete_flow(client):

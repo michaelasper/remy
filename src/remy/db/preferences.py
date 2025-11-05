@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Dict
 
 from sqlalchemy import select
@@ -11,6 +12,8 @@ from remy.models.context import Preferences
 
 from .models import PreferenceORM
 from .repository import session_scope
+
+logger = logging.getLogger(__name__)
 
 PREFERENCE_KEYS = {"diet", "max_time_min", "allergens"}
 
@@ -39,6 +42,7 @@ def load_preferences() -> Preferences:
             decoded = _decode_value(row.value)
             data[row.key] = decoded
 
+    logger.debug("Loaded preferences from DB payload=%s", data)
     return Preferences.model_validate(data)
 
 
@@ -46,6 +50,7 @@ def save_preferences(prefs: Preferences) -> Preferences:
     """Persist the provided preferences payload."""
 
     payload = prefs.model_dump()
+    logger.debug("Persisting preferences payload=%s", payload)
 
     with session_scope() as session:
         for key, value in payload.items():

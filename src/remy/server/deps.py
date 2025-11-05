@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Callable, List
+from typing import Callable, List, Tuple
 
 from fastapi import Depends, HTTPException, Request, status
 
@@ -14,8 +14,18 @@ from remy.db.inventory import (
     update_inventory_item,
 )
 from remy.db.preferences import load_preferences, save_preferences
+from remy.db.receipts import (
+    delete_receipt,
+    fetch_receipt,
+    fetch_receipt_blob,
+    get_receipt_ocr,
+    list_receipts,
+    store_receipt,
+)
 from remy.models.context import InventoryItem, PlanningContext, Preferences
 from remy.models.plan import Plan
+from remy.models.receipt import Receipt, ReceiptOcrResult
+from remy.ocr import ReceiptOcrService
 from remy.planner.app.planner import generate_plan
 
 PlanGenerator = Callable[[PlanningContext], Plan]
@@ -25,6 +35,13 @@ InventoryUpdater = Callable[[int, dict], InventoryItem]
 InventoryDeleter = Callable[[int], None]
 PreferencesProvider = Callable[[], Preferences]
 PreferencesSaver = Callable[[Preferences], Preferences]
+ReceiptListProvider = Callable[[], List[Receipt]]
+ReceiptStorer = Callable[[str, str | None, bytes, str | None], Receipt]
+ReceiptFetcher = Callable[[int], Receipt]
+ReceiptBlobFetcher = Callable[[int], Tuple[Receipt, bytes]]
+ReceiptDeleter = Callable[[int], None]
+ReceiptOcrStatusProvider = Callable[[int], ReceiptOcrResult]
+ReceiptOcrProcessor = Callable[[int], ReceiptOcrResult]
 
 
 def get_plan_generator() -> PlanGenerator:
@@ -57,6 +74,41 @@ def get_preferences_provider() -> PreferencesProvider:
 
 def get_preferences_saver() -> PreferencesSaver:
     return save_preferences
+
+
+def get_receipt_list_provider() -> ReceiptListProvider:
+    return list_receipts
+
+
+def get_receipt_storer() -> ReceiptStorer:
+    return lambda filename, content_type, content, notes=None: store_receipt(
+        filename=filename,
+        content_type=content_type,
+        content=content,
+        notes=notes,
+    )
+
+
+def get_receipt_fetcher() -> ReceiptFetcher:
+    return fetch_receipt
+
+
+def get_receipt_blob_fetcher() -> ReceiptBlobFetcher:
+    return fetch_receipt_blob
+
+
+def get_receipt_deleter() -> ReceiptDeleter:
+    return delete_receipt
+
+
+def get_receipt_ocr_status_provider() -> ReceiptOcrStatusProvider:
+    return lambda receipt_id: get_receipt_ocr(receipt_id)
+
+
+def get_receipt_ocr_processor() -> ReceiptOcrProcessor:
+    settings = get_settings()
+    service = ReceiptOcrService(lang=settings.ocr_default_lang)
+    return service.process_receipt
 
 
 def require_api_token(

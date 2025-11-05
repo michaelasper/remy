@@ -27,3 +27,15 @@ def test_preferences_round_trip(client):
     response = client.get("/preferences")
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["diet"] == "vegetarian"
+
+
+def test_preferences_accepts_string_allergens(client):
+    payload = {
+        "diet": "keto",
+        "max_time_min": 60,
+        "allergens": "peanut, sesame",
+    }
+    response = client.put("/preferences", json=payload)
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["allergens"] == ["peanut", "sesame"]

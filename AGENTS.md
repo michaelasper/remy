@@ -23,7 +23,7 @@ Create a daily dinner-planning automation that:
 | Diff & Validator | Canonicalize ingredients, compute shortages. | Planner output, inventory | Normalized plan + `shopping_shortfall` | Placeholder; needs schema + diff logic. |
 | Approvals Orchestrator | Handle human approval, dispatch updates. | Normalized plan | Meal + inventory mutations | To be built once DB writes exist. |
 | Shopping Dispatcher | Push shortages to shopping services. | `shopping_shortfall` | HA API calls, future vendor carts | Stubbed. |
-| Receipt Ingestor | Parse receipts/OCR -> inventory updates. | Images/CSV/email | Inventory upserts | Local OCR pipeline planned (Tesseract/EasyOCR). |
+| Receipt Ingestor | Parse receipts/OCR -> inventory updates. | Images/CSV/email, `/receipts` uploads | Inventory upserts | Stores uploads in SQLite, drives the Tesseract OCR pipeline, and can be fed by the background worker; inventory reconciliation is the next milestone. |
 | Nutrition Estimator | Compute macros per serving. | Candidate ingredients | `macros_per_serving` | Optional extension. |
 | Notifier | Deliver plan + follow-ups to humans. | Message payloads | Home Assistant notifications / push | Stubbed.
 
@@ -81,17 +81,17 @@ Plan (normalized output)
 - FastAPI server (`remy.server.app:app`) with endpoints:
   - `POST /plan` — generate candidates.
   - `GET /inventory` — list current inventory snapshot.
-  - `GET /inventory/view` — HTML table view.
-- Web UI served at `/` (planner workspace) + `/inventory/view`.
+  - `POST /receipts`, `GET /receipts`, `GET /receipts/{id}/download` — upload and retrieve receipt files for OCR.
+- Web UI served at `/` — Vue 3 SPA (planner, inventory, preferences, receipts).
 - Docker:
   - `Dockerfile` builds non-root image with persisted `/app/data`.
   - `docker-compose.yml` exposes API on `:8000` and mounts `remy-data` volume.
 - Makefile targets:
   - `install`, `install-dev`, `install-server`, `test`, `lint`, `typecheck`, `format`.
-  - `run-server` (optionally `DURATION=5`), `docker-build`, `docker-run`.
+  - `bootstrap`, `doctor`, `run-server` (optionally `DURATION=5`), `docker-build`, `docker-run`.
   - `compose-up/down/logs`, `test-e2e` (requires Docker daemon).
 - Dev Container support (`.devcontainer/`) for VS Code / `devcontainer up`.
-- Settings via environment: `REMY_DATABASE_PATH`, `REMY_HOME_ASSISTANT_*`.
+- Settings via environment: `REMY_DATABASE_PATH`, `REMY_HOME_ASSISTANT_*`, `REMY_API_TOKEN`, `REMY_LOG_LEVEL`, `REMY_LOG_FORMAT`, `REMY_LOG_REQUESTS`.
 
 ⸻
 
@@ -165,7 +165,7 @@ Guardrails
 1. **MVP (current)**: mock planner, inventory snapshot, FastAPI + web UI, Docker Compose baseline.
 2. **Data Wiring**: real SQLite schema, Context Assembler reading/writing DB, Approvals flow.
 3. **Smart Planner**: integrate Ollama/vLLM + recipe corpus (RAG).
-4. **Receipt OCR**: local Tesseract/EasyOCR pipeline, Receipt Ingestor→inventory updates.
+4. **Receipt OCR**: (MVP landed) local Tesseract pipeline + UI preview; next step is auto-inventory updates.
 5. **Automation Enhancements**: Notifications, shopping integrations, nutrition scoring, preference learning.
 
 ⸻
@@ -173,6 +173,7 @@ Guardrails
 🔐 Security & Privacy
 	•	All data stored locally; no cloud sync by default.
 	•	API tokens kept in .env, not checked into source control.
+	•	Logging redacts API/Home Assistant tokens and adds `X-Request-ID` correlation per request.
 	•	If remote LLM used, redact household-specific identifiers.
 
 ⸻
@@ -188,5 +189,7 @@ Implementation Hooks
 - Replace `src/remy/planner/app/planner.py::generate_plan` placeholder with real logic (rules → LLM).
 - Implement SQLite models/repositories (inventory, meals, preferences) and connect Context Assembler.
 - Build Approvals flow + `/plan/approve` endpoint, update Notifier + Shopping Dispatcher.
-- Implement local OCR pipeline in `ReceiptIngestor` once inventory schema is live.
+- Extend the OCR pipeline (`ReceiptOcrService`) to map extracted text into structured inventory deltas.
+- Add heuristics/rules on top of the OCR worker to route parsed items into the inventory repository safely.
+- Iterate on the receipt parser’s heuristics/ML so quantities, prices, and inventory mappings become production-grade.
 - Harden Docker stack (health checks, production env overrides) and expand e2e coverage.

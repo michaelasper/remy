@@ -5,7 +5,18 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import Date, DateTime, Float, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -71,4 +82,55 @@ class PreferenceORM(Base):
     )
 
 
-__all__ = ["Base", "InventoryItemORM", "MealORM", "PreferenceORM"]
+class ReceiptORM(Base):
+    """Raw receipt uploads stored for OCR/processing."""
+
+    __tablename__ = "receipts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    uploaded_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=func.now(),
+        nullable=False,
+    )
+
+
+class ReceiptOcrResultORM(Base):
+    """OCR extraction payload associated with a receipt upload."""
+
+    __tablename__ = "receipt_ocr_results"
+
+    receipt_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("receipts.id", ondelete="CASCADE"), primary_key=True
+    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    payload: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+__all__ = [
+    "Base",
+    "InventoryItemORM",
+    "MealORM",
+    "PreferenceORM",
+    "ReceiptORM",
+    "ReceiptOcrResultORM",
+]
