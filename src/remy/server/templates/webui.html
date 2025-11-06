@@ -722,17 +722,28 @@
                         class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
                       />
                     </label>
-                    <label class="flex flex-col gap-2 text-sm font-medium text-slate-200">
-                      Rating (1-5)
-                      <input
-                        v-model="meals.form.rating"
-                        type="number"
-                        min="1"
-                        max="5"
-                        class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
-                        placeholder=""
-                      />
-                    </label>
+                    <div class="flex flex-col gap-2 text-sm font-medium text-slate-200">
+                      Rating
+                      <div class="flex items-center gap-1">
+                        <button
+                          v-for="star in 5"
+                          :key="star"
+                          type="button"
+                          @click="meals.form.rating = star"
+                          class="text-2xl transition"
+                          :class="star <= Number(meals.form.rating) ? 'text-yellow-300' : 'text-slate-600'"
+                        >
+                          ★
+                        </button>
+                        <button
+                          type="button"
+                          @click="meals.form.rating = ''"
+                          class="text-xs text-slate-400 underline"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
                   </div>
                   <div class="flex flex-col gap-2">
                     <label class="text-sm font-medium text-slate-200">Meal Title</label>
@@ -796,16 +807,28 @@
                           <h4 class="text-base font-semibold text-white">{{ meal.title }}</h4>
                         </div>
                         <div class="grid gap-3 sm:grid-cols-2">
-                          <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                            Rating (1-5)
-                            <input
-                              v-model="meal.editRating"
-                              type="number"
-                              min="1"
-                              max="5"
-                              class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
-                            />
-                          </label>
+                          <div class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                            Rating
+                            <div class="flex items-center gap-1">
+                              <button
+                                v-for="star in 5"
+                                :key="star"
+                                type="button"
+                                @click="meal.editRating = star"
+                                class="text-xl transition"
+                                :class="star <= Number(meal.editRating) ? 'text-yellow-300' : 'text-slate-600'"
+                              >
+                                ★
+                              </button>
+                              <button
+                                type="button"
+                                @click="meal.editRating = ''"
+                                class="text-xs text-slate-400 underline"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          </div>
                           <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
                             Notes
                             <textarea
