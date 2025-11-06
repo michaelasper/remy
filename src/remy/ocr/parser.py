@@ -36,6 +36,20 @@ _UNIT_TOKENS = {
 }
 _CURRENCY_SIGNS = {"$": "USD", "£": "GBP", "€": "EUR", "¥": "JPY", "₹": "INR"}
 
+_KNOWN_PRODUCTS: dict[str, list[str]] = {
+    "Bananas": [r"\bbanana(?:s)?\b"],
+    "Red apples": [r"\bred (?:apple|apples)\b", r"\bred delicious"],
+    "Green apples": [r"\bgreen (?:apple|apples)\b"],
+    "Roma tomatoes": [r"\broma (?:tomato|tomatoes)\b"],
+    "Iceberg lettuce": [r"\biceberg (?:lettuce)?\b"],
+    "Avocados": [r"\bavocado(?:s)?\b"],
+    "Cucumber": [r"\bcucumber(?:s)?\b"],
+    "Blueberries": [r"\bblueberr(?:y|ies)\b"],
+    "Broccoli": [r"\bbroccol[iy]\b"],
+    "Mushrooms": [r"\bmushroom(?:s)?\b"],
+    "Ginger": [r"\bginger\b"],
+}
+
 
 def _normalize_line(line: str) -> str:
     return re.sub(r"\s+", " ", line).strip()
@@ -98,6 +112,8 @@ class ReceiptParser:
                 parsed.confidence = max(parsed.confidence, min(1.0, match.score / 100))
 
             items.append(parsed)
+
+        self._augment_known_products(text, items)
 
         return ReceiptStructuredData(
             store_name=store_name,
@@ -234,6 +250,27 @@ class ReceiptParser:
         matched_name, score, index = result
         matched_item = inventory[index]
         return InventoryMatch(item_id=matched_item.id, name=matched_name, score=score)
+
+    def _augment_known_products(self, text: str, items: List[ReceiptLineItem]) -> None:
+        existing = {_normalize_line(item.name) for item in items}
+        lowered = text.lower()
+        for canonical, patterns in _KNOWN_PRODUCTS.items():
+            normalized = _normalize_line(canonical)
+            if normalized in existing:
+                continue
+            if any(re.search(pattern, lowered) for pattern in patterns):
+                items.append(
+                    ReceiptLineItem(
+                        raw_text=canonical,
+                        name=canonical,
+                        quantity=None,
+                        unit=None,
+                        unit_price=None,
+                        total_price=None,
+                        confidence=0.85,
+                    )
+                )
+                existing.add(normalized)
 
     def _get_inventory(self) -> List[InventoryItem]:
         if self._inventory_cache is None:

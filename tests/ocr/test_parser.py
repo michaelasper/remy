@@ -90,3 +90,37 @@ def test_parser_matches_fixture(epsilon: float) -> None:
             assert abs(match.total_price - expected_item["total_price"]) <= epsilon
         if expected_item.get("quantity") is not None and match.quantity is not None:
             assert abs(match.quantity - expected_item["quantity"]) <= epsilon
+
+
+def test_known_product_heuristics():
+    sample_text = """
+Bananas $1.20
+Red Apples $3.50
+Green Apples $2.80
+Roma Tomatoes $4.10
+Iceberg Lettuce $1.99
+Avocados $5.00
+Cucumber $0.95
+Blueberries $3.99
+Broccoli $2.25
+Mushrooms $2.15
+Ginger $1.05
+""".strip()
+
+    parser = ReceiptParser()
+    result = parser.parse(sample_text)
+    names = {item.name.lower() for item in result.items}
+    expected = {
+        "bananas",
+        "red apples",
+        "green apples",
+        "roma tomatoes",
+        "iceberg lettuce",
+        "avocados",
+        "cucumber",
+        "blueberries",
+        "broccoli",
+        "mushrooms",
+        "ginger",
+    }
+    assert expected.issubset(names)

@@ -1278,8 +1278,20 @@
               }
               const ocr = await response.json();
               this.updateReceiptOcr(receipt.id, ocr);
-              this.receipts.status = "OCR processing complete.";
-              this.receipts.statusColor = "text-green-300";
+              const ingestedCount = ocr?.metadata?.ingested?.length || 0;
+              const suggestionCount = ocr?.metadata?.suggestions?.length || 0;
+              await Promise.all([this.loadInventory(), this.loadSuggestions()]);
+              if (ingestedCount > 0) {
+                this.receipts.status = `OCR complete. Added ${ingestedCount} item(s) to inventory.`;
+                this.receipts.statusColor = "text-green-300";
+              } else if (suggestionCount > 0) {
+                this.receipts.status =
+                  `OCR complete. ${suggestionCount} item(s) need review in Pending Suggestions.`;
+                this.receipts.statusColor = "text-yellow-300";
+              } else {
+                this.receipts.status = "OCR processing complete.";
+                this.receipts.statusColor = "text-green-300";
+              }
             } catch (error) {
               this.receipts.status = `Error running OCR: ${error.message}`;
               this.receipts.statusColor = "text-red-300";
