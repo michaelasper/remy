@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from rapidfuzz import fuzz, process
 
+from remy import metrics
 from remy.db.inventory import create_inventory_item, list_inventory, update_inventory_item
 from remy.db.inventory_suggestions import create_suggestion
 
@@ -101,6 +102,12 @@ def ingest_receipt_items(
             )
             suggestions.append({"id": suggestion.id, "name": suggestion.name})
             metadata_suggestions.append({"id": suggestion.id, "name": suggestion.name})
+
+    try:
+        metrics.INGEST_ITEMS.labels(result="ingested").inc(len(ingested))
+        metrics.INGEST_ITEMS.labels(result="suggested").inc(len(suggestions))
+    except Exception:  # pragma: no cover - metrics best effort
+        pass
 
     return {
         "ingested": ingested,

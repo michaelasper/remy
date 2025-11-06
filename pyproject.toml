@@ -21,7 +21,8 @@ dependencies = [
     "pillow>=10.3",
     "pytesseract>=0.3.10",
     "pdf2image>=1.17",
-    "rapidfuzz>=3.6"
+    "rapidfuzz>=3.6",
+    "prometheus-client>=0.19"
 ]
 
 [project.optional-dependencies]

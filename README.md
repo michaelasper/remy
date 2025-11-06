@@ -16,6 +16,7 @@ Remy is a multi-agent automation platform that assembles a daily dinner plan for
 - Install Tesseract OCR locally (`brew install tesseract` on macOS, `sudo apt-get install tesseract-ocr` on Debian/Ubuntu). The project Docker image installs Tesseract and Poppler so OCR works inside Docker/Compose without extra steps.
 - Install Poppler utilities for PDF support (`brew install poppler` or `sudo apt-get install poppler-utils`) so `pdf2image` can rasterize multi-page receipts.
 - Configure `REMY_OCR_ARCHIVE_PATH` (defaults to `./data/receipts_archive`) if you want processed receipt blobs archived outside SQLite.
+- Prometheus metrics are exposed at `/metrics`; scrape the endpoint to monitor request latency, OCR throughput, and ingestion counts.
 - Run the smoke test suite with `pytest` to validate the scaffolding.
 - Execute `remy plan path/to/context.json --pretty` to generate placeholder plans from a context payload.
 - Launch the API with `uvicorn remy.server.app:app --reload` and POST planning contexts to `/plan`.

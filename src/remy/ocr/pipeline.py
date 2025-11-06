@@ -18,6 +18,7 @@ except ImportError:  # pragma: no cover
     pytesseract = None  # type: ignore[assignment]
     Output = None  # type: ignore[assignment]
 
+from remy import metrics
 from remy.db.receipts import fetch_receipt_blob, get_receipt_ocr, update_receipt_ocr
 from remy.ingest import ingest_receipt_items
 from remy.models.receipt import Receipt, ReceiptOcrResult
@@ -99,6 +100,7 @@ class ReceiptOcrService:
                 metadata=metadata,
                 error_message=None,
             )
+            metrics.OCR_JOBS.labels(status="succeeded").inc()
             logger.debug(
                 "OCR succeeded receipt_id=%s confidence=%s", receipt_id, result.confidence
             )
@@ -107,6 +109,7 @@ class ReceiptOcrService:
             logger.warning(
                 "Unsupported receipt for OCR receipt_id=%s reason=%s", receipt_id, exc
             )
+            metrics.OCR_JOBS.labels(status="unsupported").inc()
             return self._update_status(
                 receipt_id,
                 status="failed",
@@ -118,6 +121,7 @@ class ReceiptOcrService:
             raise
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.exception("OCR pipeline crash receipt_id=%s", receipt_id)
+            metrics.OCR_JOBS.labels(status="failed").inc()
             return self._update_status(
                 receipt_id,
                 status="failed",

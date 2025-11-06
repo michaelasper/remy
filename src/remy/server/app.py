@@ -12,9 +12,10 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import Body, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
-from remy import __version__
+from remy import __version__, metrics
 from remy.config import Settings, get_settings
 from remy.db.receipts import update_receipt_ocr
 from remy.ingest import ingest_receipt_items
@@ -121,6 +122,8 @@ def create_app() -> FastAPI:
             request_id = request.headers.get("X-Request-ID") or uuid4().hex
             request.state.request_id = request_id
             start = perf_counter()
+            path = request.url.path
+            method = request.method
             try:
                 response: Response = await call_next(request)
             except Exception:
@@ -131,6 +134,10 @@ def create_app() -> FastAPI:
                     request.url.path,
                     duration_ms,
                     extra={"request_id": request_id},
+                )
+                metrics.REQUEST_COUNT.labels(method=method, path=path, status="500").inc()
+                metrics.REQUEST_LATENCY.labels(method=method, path=path).observe(
+                    duration_ms / 1000.0
                 )
                 raise
 
@@ -144,6 +151,17 @@ def create_app() -> FastAPI:
                 duration_ms,
                 extra={"request_id": request_id},
             )
+            try:
+                metrics.REQUEST_COUNT.labels(
+                    method=method,
+                    path=path,
+                    status=str(response.status_code),
+                ).inc()
+                metrics.REQUEST_LATENCY.labels(method=method, path=path).observe(
+                    duration_ms / 1000.0
+                )
+            except Exception:  # pragma: no cover - metrics best effort
+                pass
             return response
 
     @application.exception_handler(RequestValidationError)
@@ -537,6 +555,11 @@ def create_app() -> FastAPI:
             deleter(suggestion_id)
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    @application.get("/metrics", include_in_schema=False)
+    def metrics_endpoint() -> Response:
+        payload = generate_latest()
+        return Response(content=payload, media_type=CONTENT_TYPE_LATEST)
 
     return application
 
