@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
-from typing import Dict, Iterable, List, Optional
+from typing import Iterable, List, Mapping, Optional
 
 from remy.models.context import InventoryItem, PlanningContext
 from remy.models.plan import (
@@ -14,6 +13,19 @@ from remy.models.plan import (
     PlanCandidate,
     ShoppingShortfall,
 )
+
+from .constraint_engine import (
+    AllergenExclusionRule,
+    AttendeeScalingRule,
+    BestBeforePriorityRule,
+    ConstraintEngine,
+    DietCompatibilityRule,
+    InventoryCoverageRule,
+    LeftoverUtilizationRule,
+    MaxTimeRule,
+    RecencyPenaltyRule,
+)
+from .utils import build_inventory_index, normalize_name, resolve_inventory_item
 
 
 @dataclass(frozen=True)
@@ -128,99 +140,28 @@ RECIPES: List[Recipe] = [
 ]
 
 
-def _normalize_name(value: str) -> str:
-    return " ".join(value.lower().split())
-
-
-def _inventory_map(inventory: List[InventoryItem]) -> Dict[str, InventoryItem]:
-    return {_normalize_name(item.name): item for item in inventory}
-
-
-def _best_before_score(item: InventoryItem, current_date: date) -> float:
-    if item.best_before is None:
-        return 0.0
-    days_remaining = (item.best_before - current_date).days
-    if days_remaining < 0:
-        return 2.0
-    if days_remaining <= 2:
-        return 1.5
-    if days_remaining <= 7:
-        return 1.0
-    if days_remaining <= 14:
-        return 0.5
-    return 0.0
-
-
-def _diet_allows(recipe: Recipe, context: PlanningContext) -> bool:
-    diet = (context.prefs.diet or "").strip().lower()
-    if not diet:
-        return True
-    return diet in {tag.lower() for tag in recipe.tags} or "flex" in {
-        tag.lower() for tag in recipe.tags
-    }
-
-
-def _contains_allergen(recipe: Recipe, allergens: Iterable[str]) -> bool:
-    normalized_allergens = {_normalize_name(allergen) for allergen in allergens}
-    if not normalized_allergens:
-        return False
-    for ingredient in recipe.ingredients:
-        ingredient_name = _normalize_name(ingredient.name)
-        if any(allergen in ingredient_name for allergen in normalized_allergens):
-            return True
-    return False
-
-
-def _score_recipe(
-    recipe: Recipe,
-    context: PlanningContext,
-    inventory_lookup: Dict[str, InventoryItem],
-) -> float:
-    score = 0.0
-    current_date = context.date or date.today()
-
-    primary_matches = 0
-    for primary in recipe.primary_ingredients:
-        normalized = _normalize_name(primary)
-        for key, item in inventory_lookup.items():
-            if normalized in key:
-                primary_matches += 1
-                score += 1.5 + _best_before_score(item, current_date)
-                break
-
-    if primary_matches == 0:
-        score -= 1.0
-
-    if _diet_allows(recipe, context):
-        score += 1.0
-    else:
-        score -= 2.0
-
-    allergens = context.prefs.allergens if context.prefs else []
-    if _contains_allergen(recipe, allergens):
-        return -10.0
-
-    max_time = context.prefs.max_time_min or 45
-    if recipe.estimated_time_min <= max_time:
-        score += 1.0
-    else:
-        score -= 0.5
-
-    recent_titles = {
-        _normalize_name(meal.title)
-        for meal in context.recent_meals
-        if getattr(meal, "title", None)
-    }
-    if _normalize_name(recipe.title) in recent_titles:
-        score -= 1.0
-
-    return score
+def _build_constraint_engine() -> ConstraintEngine:
+    """Create a constraint engine instance with the default rule set."""
+    return ConstraintEngine(
+        hard_rules=[
+            DietCompatibilityRule(),
+            AllergenExclusionRule(),
+            MaxTimeRule(),
+        ],
+        soft_rules=[
+            InventoryCoverageRule(),
+            BestBeforePriorityRule(),
+            LeftoverUtilizationRule(),
+            RecencyPenaltyRule(),
+            AttendeeScalingRule(),
+        ],
+    )
 
 
 def _build_candidate(
     recipe: Recipe,
     context: PlanningContext,
-    inventory_lookup: Dict[str, InventoryItem],
+    inventory_lookup: Mapping[str, InventoryItem],
 ) -> PlanCandidate:
     servings = context.constraints.attendees or recipe.servings
     requirements: List[IngredientRequirement] = []
@@ -228,13 +169,8 @@ def _build_candidate(
     shortfalls: List[ShoppingShortfall] = []
 
     for ingredient in recipe.ingredients:
-        normalized = _normalize_name(ingredient.name)
-        matched_item: Optional[InventoryItem] = None
-        for key, item in inventory_lookup.items():
-            if normalized in key or key in normalized:
-                matched_item = item
-                break
-
+        normalized = normalize_name(ingredient.name)
+        matched_item: Optional[InventoryItem] = resolve_inventory_item(normalized, inventory_lookup)
         quantity_needed = ingredient.quantity_g
 
         if matched_item is not None:
@@ -272,14 +208,15 @@ def _build_candidate(
                     quantity_g=quantity_needed,
                 )
             )
-            shortfalls.append(
-                ShoppingShortfall(
-                    ingredient_id=None,
-                    name=ingredient.name,
-                    need_g=quantity_needed,
-                    reason="not_in_inventory",
+            if not ingredient.optional:
+                shortfalls.append(
+                    ShoppingShortfall(
+                        ingredient_id=None,
+                        name=ingredient.name,
+                        need_g=quantity_needed,
+                        reason="not_in_inventory",
+                    )
                 )
-            )
 
     return PlanCandidate(
         title=recipe.title,
@@ -319,22 +256,16 @@ def _fallback_candidate(context: PlanningContext) -> PlanCandidate:
 
 
 def generate_plan(context: PlanningContext) -> Plan:
-    """Generate dinner plan candidates using simple heuristic scoring."""
+    """Generate dinner plan candidates using the declarative constraint engine."""
 
-    inventory_lookup = _inventory_map(context.inventory)
+    inventory_lookup = build_inventory_index(context.inventory)
+    engine = _build_constraint_engine()
+    evaluations = engine.rank_recipes(context, RECIPES)
 
-    scored: List[tuple[float, Recipe]] = []
-    for recipe in RECIPES:
-        score = _score_recipe(recipe, context, inventory_lookup)
-        scored.append((score, recipe))
-
-    scored.sort(key=lambda pair: pair[0], reverse=True)
-
-    top_recipes = [recipe for score, recipe in scored if score > -5][:3]
-
-    candidates: List[PlanCandidate] = []
-    for recipe in top_recipes:
-        candidates.append(_build_candidate(recipe, context, inventory_lookup))
+    candidates: List[PlanCandidate] = [
+        _build_candidate(evaluation.recipe, context, inventory_lookup)
+        for evaluation in evaluations[:3]
+    ]
 
     if not candidates:
         if context.inventory:

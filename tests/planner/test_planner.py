@@ -1,4 +1,4 @@
-"""Heuristic planner tests."""
+"""Constraint engine planner tests."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from datetime import date, timedelta
 from remy.models.context import (
     Constraints,
     InventoryItem,
+    LeftoverItem,
     PlanningContext,
     Preferences,
 )
@@ -24,6 +25,16 @@ def _inventory_item(**kwargs) -> InventoryItem:
     }
     defaults.update(kwargs)
     return InventoryItem.model_validate(defaults)
+
+
+def _leftover_item(**kwargs) -> LeftoverItem:
+    defaults = {
+        "name": "tofu",
+        "qty": 200,
+        "unit": "g",
+    }
+    defaults.update(kwargs)
+    return LeftoverItem.model_validate(defaults)
 
 
 def test_planner_prioritises_near_expiry_inventory():
@@ -83,3 +94,58 @@ def test_planner_filters_allergens_and_respects_time():
     # ensure allergen-bearing recipes are removed
     for candidate in plan.candidates:
         assert "almond" not in " ".join(step.lower() for step in candidate.steps)
+
+
+def test_optional_ingredient_missing_does_not_raise_shortfall():
+    inventory = [
+        _inventory_item(
+            id=5,
+            name="chicken thigh, boneless",
+            qty=600,
+            best_before=date.today() + timedelta(days=1),
+        ),
+        _inventory_item(
+            id=6,
+            name="broccoli",
+            qty=400,
+            unit="g",
+            best_before=date.today() + timedelta(days=2),
+        ),
+    ]
+    context = PlanningContext(
+        date=date.today(),
+        inventory=inventory,
+        prefs=Preferences(diet="omnivore", max_time_min=60, allergens=[]),
+        constraints=Constraints(attendees=4),
+    )
+
+    plan = generate_plan(context)
+    chicken_candidates = [
+        candidate for candidate in plan.candidates if "lemon herb chicken" in candidate.title.lower()
+    ]
+    assert chicken_candidates
+    for candidate in chicken_candidates:
+        assert all(shortfall.name.lower() != "lemon" for shortfall in candidate.shopping_shortfall)
+
+
+def test_leftovers_are_prioritised_when_available():
+    inventory = [
+        _inventory_item(id=7, name="bell pepper", qty=280, unit="g"),
+        _inventory_item(id=8, name="carrot", qty=200, unit="g"),
+        _inventory_item(id=9, name="soy sauce", qty=100, unit="ml"),
+        _inventory_item(id=10, name="garlic", qty=30, unit="g"),
+    ]
+    leftovers = [
+        _leftover_item(name="tofu", qty=250, unit="g"),
+    ]
+    context = PlanningContext(
+        date=date.today(),
+        inventory=inventory,
+        leftovers=leftovers,
+        prefs=Preferences(diet="vegan", max_time_min=45, allergens=[]),
+        constraints=Constraints(attendees=2),
+    )
+
+    plan = generate_plan(context)
+    assert plan.candidates
+    assert plan.candidates[0].title == "Vegetable Stir-Fry with Tofu"
