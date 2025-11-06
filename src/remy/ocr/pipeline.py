@@ -18,11 +18,8 @@ except ImportError:  # pragma: no cover
     pytesseract = None  # type: ignore[assignment]
     Output = None  # type: ignore[assignment]
 
-from remy.db.receipts import (
-    fetch_receipt_blob,
-    get_receipt_ocr,
-    update_receipt_ocr,
-)
+from remy.db.receipts import fetch_receipt_blob, get_receipt_ocr, update_receipt_ocr
+from remy.ingest import ingest_receipt_items
 from remy.models.receipt import Receipt, ReceiptOcrResult
 from remy.ocr.parser import ReceiptParser
 from remy.ocr.sanitize import sanitize_text
@@ -83,10 +80,17 @@ class ReceiptOcrService:
         """Run OCR against the requested receipt and persist the result."""
 
         logger.debug("Starting OCR processing for receipt_id=%s", receipt_id)
+        existing_status = self._get_status(receipt_id)
+        auto_ingest_allowed = True
+        if existing_status and existing_status.metadata:
+            auto_ingest_allowed = not existing_status.metadata.get("auto_ingested")
+
         try:
             context = self._prepare_context(receipt_id)
             self._update_status(receipt_id, status="processing")
-            text, confidence, metadata = self._run_ocr(context)
+            text, confidence, metadata = self._run_ocr(
+                context, auto_ingest=auto_ingest_allowed
+            )
             result = self._update_status(
                 receipt_id,
                 status="succeeded",
@@ -191,7 +195,9 @@ class ReceiptOcrService:
             return 0
         return value
 
-    def _run_ocr(self, context: OcrContext) -> tuple[str, Optional[float], Dict[str, object]]:
+    def _run_ocr(
+        self, context: OcrContext, *, auto_ingest: bool
+    ) -> tuple[str, Optional[float], Dict[str, object]]:
         if pytesseract is None or Output is None:  # pragma: no cover - guard
             raise UnsupportedReceiptError(
                 "pytesseract is not installed. Install OCR extras to enable processing."
@@ -249,7 +255,30 @@ class ReceiptOcrService:
 
         if self._parser and text_output:
             parsed = self._parser.parse(text_output)
-            metadata["parsed"] = parsed.model_dump()
+            parsed_payload = parsed.model_dump()
+            metadata["parsed"] = parsed_payload
+            ingestion_items = [
+                {
+                    "name": entry.get("name"),
+                    "quantity": entry.get("quantity"),
+                    "unit": entry.get("unit"),
+                    "inventory_match_id": entry.get("inventory_match_id"),
+                    "notes": entry.get("notes"),
+                }
+                for entry in parsed_payload.get("items", [])
+            ]
+            if auto_ingest and ingestion_items:
+                ingestion_result = ingest_receipt_items(
+                    context.receipt.id,
+                    ingestion_items,
+                    create_missing=True,
+                )
+                metadata["ingested"] = ingestion_result["metadata_ingested"]
+                metadata["suggestions"] = ingestion_result["metadata_suggestions"]
+                metadata["auto_ingested"] = True
+            else:
+                metadata.setdefault("ingested", [])
+                metadata.setdefault("suggestions", [])
 
         return text_output, average_confidence, metadata
 

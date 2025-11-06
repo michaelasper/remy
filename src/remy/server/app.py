@@ -13,13 +13,11 @@ from fastapi import Body, Depends, FastAPI, File, Form, HTTPException, Request, 
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field, ValidationError, model_validator
-from rapidfuzz import fuzz, process
 
 from remy import __version__
 from remy.config import Settings, get_settings
-from remy.db.inventory import list_inventory
-from remy.db.inventory_suggestions import create_suggestion
 from remy.db.receipts import update_receipt_ocr
+from remy.ingest import ingest_receipt_items
 from remy.logging_utils import configure_logging as configure_app_logging
 from remy.models.context import InventoryItem, PlanningContext, Preferences
 from remy.models.plan import Plan
@@ -436,8 +434,6 @@ def create_app() -> FastAPI:
         ocr_provider: deps.ReceiptOcrStatusProvider = Depends(
             deps.get_receipt_ocr_status_provider
         ),
-        inventory_creator: deps.InventoryCreator = Depends(deps.get_inventory_creator),
-        inventory_updater: deps.InventoryUpdater = Depends(deps.get_inventory_updater),
     ) -> dict[str, Any]:
         if not request_payload.items:
             raise HTTPException(
@@ -451,71 +447,28 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
         metadata = ocr_result.metadata.copy() if ocr_result.metadata else {}
-        ingested_records: list[dict[str, Any]] = metadata.get("ingested", [])
-        suggestion_records: list[dict[str, Any]] = metadata.get("suggestions", [])
-        ingested: list[dict[str, Any]] = []
-        skipped: list[dict[str, Any]] = []
-        suggestions: list[dict[str, Any]] = []
+        existing_ingested: list[dict[str, Any]] = metadata.get("ingested", [])
+        existing_suggestions: list[dict[str, Any]] = metadata.get("suggestions", [])
 
-        inventory_snapshot = list_inventory()
-        inventory_by_id = {item.id: item for item in inventory_snapshot if item.id is not None}
-        inventory_choices = [item.name for item in inventory_snapshot if item.id is not None]
+        ingestion_payload = [
+            {
+                "name": item.name,
+                "quantity": item.quantity,
+                "unit": item.unit,
+                "inventory_match_id": item.inventory_match_id,
+                "notes": item.notes,
+            }
+            for item in request_payload.items
+        ]
 
-        for item in request_payload.items:
-            quantity = item.quantity
-            if quantity is not None and quantity <= 0:
-                skipped.append({"name": item.name, "reason": "invalid_quantity"})
-                continue
+        ingestion_result = ingest_receipt_items(
+            receipt_id,
+            ingestion_payload,
+            create_missing=False,
+        )
 
-            matched_inventory = None
-            match_score: Optional[float] = None
-
-            if item.inventory_match_id:
-                matched_inventory = inventory_by_id.get(item.inventory_match_id)
-                if matched_inventory is None:
-                    skipped.append({"name": item.name, "reason": "inventory_not_found"})
-                    continue
-            else:
-                if inventory_choices:
-                    match = process.extractOne(
-                        item.name,
-                        inventory_choices,
-                        scorer=fuzz.WRatio,
-                    )
-                    if match:
-                        matched_name, score, index = match
-                        match_score = score / 100.0
-                        matched_inventory = inventory_snapshot[index] if index is not None else None
-
-            if matched_inventory is not None and match_score is not None and match_score < 0.85:
-                matched_inventory = None
-
-            if matched_inventory is not None:
-                if quantity is None:
-                    skipped.append({"name": item.name, "reason": "missing_quantity"})
-                    continue
-                new_quantity = float(matched_inventory.qty) + float(quantity)
-                updated = inventory_updater(matched_inventory.id, {"quantity": new_quantity})
-                ingested.append({"id": updated.id, "action": "updated", "name": updated.name})
-                ingested_records.append({"name": updated.name, "quantity": quantity})
-                continue
-
-            if match_score is None:
-                match_score = None
-
-            suggestion = create_suggestion(
-                receipt_id=receipt_id,
-                name=item.name,
-                quantity=quantity,
-                unit=item.unit,
-                confidence=match_score,
-                notes=item.notes,
-            )
-            suggestions.append({"id": suggestion.id, "name": suggestion.name})
-            suggestion_records.append({"id": suggestion.id, "name": suggestion.name})
-
-        metadata["ingested"] = ingested_records
-        metadata["suggestions"] = suggestion_records
+        metadata["ingested"] = existing_ingested + ingestion_result["metadata_ingested"]
+        metadata["suggestions"] = existing_suggestions + ingestion_result["metadata_suggestions"]
         update_receipt_ocr(
             receipt_id,
             status=ocr_result.status,
@@ -524,7 +477,11 @@ def create_app() -> FastAPI:
             metadata=metadata,
         )
 
-        return {"ingested": ingested, "skipped": skipped, "suggestions": suggestions}
+        return {
+            "ingested": ingestion_result["ingested"],
+            "skipped": ingestion_result["skipped"],
+            "suggestions": ingestion_result["suggestions"],
+        }
 
     @application.get(
         "/inventory/suggestions",
