@@ -9,7 +9,18 @@ from typing import Any, Optional
 from uuid import uuid4
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from fastapi import Body, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import (
+    Body,
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
@@ -20,7 +31,7 @@ from remy.config import Settings, get_settings
 from remy.db.receipts import update_receipt_ocr
 from remy.ingest import ingest_receipt_items
 from remy.logging_utils import configure_logging as configure_app_logging
-from remy.models.context import InventoryItem, PlanningContext, Preferences
+from remy.models.context import InventoryItem, PlanningContext, Preferences, RecentMeal
 from remy.models.plan import Plan
 from remy.models.receipt import (
     InventorySuggestion as InventorySuggestionModel,
@@ -561,6 +572,49 @@ def create_app() -> FastAPI:
         payload = generate_latest()
         return Response(content=payload, media_type=CONTENT_TYPE_LATEST)
 
+    @application.get(
+        "/meals",
+        response_model=list[RecentMeal],
+        summary="List recorded meals",
+    )
+    def meals_list(
+        provider: deps.MealsProvider = Depends(deps.get_meals_provider),
+    ) -> list[RecentMeal]:
+        return provider()
+
+    @application.post(
+        "/meals",
+        response_model=RecentMeal,
+        status_code=status.HTTP_201_CREATED,
+        summary="Create or update a meal record",
+    )
+    def meals_upsert(
+        payload: MealUpsertRequest,
+        auth: None = Depends(deps.require_api_token),
+        recorder: deps.MealRecorder = Depends(deps.get_meal_recorder),
+    ) -> RecentMeal:
+        meal = RecentMeal(
+            date=payload.date,
+            title=payload.title,
+            rating=payload.rating,
+            notes=payload.notes,
+        )
+        result = recorder(meal)
+        return result
+
+    @application.delete(
+        "/meals",
+        status_code=status.HTTP_204_NO_CONTENT,
+        summary="Delete a meal record",
+    )
+    def meals_delete(
+        meal_date: date = Query(alias="date"),
+        title: str = Query(...),
+        auth: None = Depends(deps.require_api_token),
+        deleter: deps.MealDeleter = Depends(deps.get_meal_deleter),
+    ) -> None:
+        deleter(meal_date, title)
+
     return application
 
 
@@ -585,6 +639,13 @@ class InventorySuggestionApproveRequest(BaseModel):
     name: Optional[str] = Field(default=None, max_length=255)
     quantity: Optional[float] = Field(default=None, gt=0)
     unit: Optional[str] = Field(default=None, max_length=64)
+
+
+class MealUpsertRequest(BaseModel):
+    date: date
+    title: str = Field(min_length=1, max_length=255)
+    rating: Optional[int] = Field(default=None, ge=1, le=5)
+    notes: Optional[str] = Field(default=None, max_length=1000)
 
 
 class InventoryCreateRequest(BaseModel):

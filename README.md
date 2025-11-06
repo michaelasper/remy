@@ -85,6 +85,7 @@ If the planner fails, the system reuses the most recent approved meal as a fallb
 8. Use the Receipts tab to review parsed line items: tweak quantities, deselect anything irrelevant, and click **Approve Selected** to add or update inventory entries. Dismiss or approve queued suggestions from the Inventory tab when needed.
 9. Raw binaries are compressed to `REMY_OCR_ARCHIVE_PATH` once OCR succeeds so the receipts table stays lean, and the metadata continues to serve the sanitized text.
 10. Review and copy the extracted text directly in the UI for auditing.
+11. Track meal outcomes in the Meals dashboard (`/meals`), leaving ratings and notes to inform future planning.
 
 *Limitations*: ensure Tesseract and Poppler executables are present locally (or run inside the Docker image). Bounding boxes are limited to the first 1,000 words to keep payload sizes manageable.
 

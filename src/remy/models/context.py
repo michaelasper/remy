@@ -24,6 +24,7 @@ class RecentMeal(BaseModel):
     date: date
     title: str
     rating: Optional[int] = Field(default=None, ge=1, le=5)
+    notes: Optional[str] = Field(default=None, max_length=1000)
 
     model_config = ConfigDict(frozen=True)
 

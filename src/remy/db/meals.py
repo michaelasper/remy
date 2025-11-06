@@ -20,6 +20,7 @@ def _to_model(row: MealORM) -> RecentMeal:
             "date": row.date,
             "title": row.title,
             "rating": row.rating,
+            "notes": row.notes,
         }
     )
 
@@ -55,9 +56,15 @@ def _upsert_meal(session: Session, meal: RecentMeal) -> MealORM:
     )
     if existing:
         existing.rating = meal.rating
+        existing.notes = meal.notes
         return existing
 
-    new_meal = MealORM(date=meal.date, title=meal.title, rating=meal.rating)
+    new_meal = MealORM(
+        date=meal.date,
+        title=meal.title,
+        rating=meal.rating,
+        notes=meal.notes,
+    )
     session.add(new_meal)
     return new_meal
 

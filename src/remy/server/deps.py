@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Callable, List, Optional, Tuple
 
 from fastapi import Depends, HTTPException, Request, status
@@ -13,11 +14,8 @@ from remy.db.inventory import (
     list_inventory,
     update_inventory_item,
 )
-from remy.db.inventory_suggestions import (
-    approve_suggestion,
-    delete_suggestion,
-    list_suggestions,
-)
+from remy.db.inventory_suggestions import approve_suggestion, delete_suggestion, list_suggestions
+from remy.db.meals import delete_meal, list_recent_meals, record_meal
 from remy.db.preferences import load_preferences, save_preferences
 from remy.db.receipts import (
     delete_receipt,
@@ -27,7 +25,7 @@ from remy.db.receipts import (
     list_receipts,
     store_receipt,
 )
-from remy.models.context import InventoryItem, PlanningContext, Preferences
+from remy.models.context import InventoryItem, PlanningContext, Preferences, RecentMeal
 from remy.models.plan import Plan
 from remy.models.receipt import InventorySuggestion, Receipt, ReceiptLineItem, ReceiptOcrResult
 from remy.ocr import ReceiptOcrService
@@ -53,6 +51,9 @@ InventorySuggestionApprover = Callable[
     ReceiptLineItem,
 ]
 InventorySuggestionDeleter = Callable[[int], None]
+MealsProvider = Callable[[], List[RecentMeal]]
+MealRecorder = Callable[[RecentMeal], RecentMeal]
+MealDeleter = Callable[[date, str], None]
 
 
 def get_plan_generator() -> PlanGenerator:
@@ -137,6 +138,18 @@ def get_inventory_suggestion_approver() -> InventorySuggestionApprover:
 
 def get_inventory_suggestion_deleter() -> InventorySuggestionDeleter:
     return lambda suggestion_id: delete_suggestion(suggestion_id)
+
+
+def get_meals_provider() -> MealsProvider:
+    return lambda: list_recent_meals(limit=30)
+
+
+def get_meal_recorder() -> MealRecorder:
+    return record_meal
+
+
+def get_meal_deleter() -> MealDeleter:
+    return lambda meal_date, title: delete_meal(meal_date, title)
 
 
 def require_api_token(

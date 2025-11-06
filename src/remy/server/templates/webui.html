@@ -699,6 +699,145 @@
               </div>
             </div>
           </section>
+
+          <!-- Meals -->
+          <section
+            v-if="currentTab === 'meals'"
+            class="rounded-2xl border border-slate-800 bg-slate-900/60 shadow-2xl shadow-primary-900/10 backdrop-blur-sm"
+          >
+            <div class="grid gap-6 p-6 lg:grid-cols-2">
+              <div class="flex flex-col gap-4">
+                <header>
+                  <h2 class="text-xl font-semibold text-white">Add Meal Entry</h2>
+                  <p class="text-sm text-slate-300">Capture ratings and notes to improve future recommendations.</p>
+                </header>
+                <form @submit.prevent="addMeal" class="grid gap-4">
+                  <div class="grid gap-4 sm:grid-cols-2">
+                    <label class="flex flex-col gap-2 text-sm font-medium text-slate-200">
+                      Date
+                      <input
+                        v-model="meals.form.date"
+                        type="date"
+                        required
+                        class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                      />
+                    </label>
+                    <label class="flex flex-col gap-2 text-sm font-medium text-slate-200">
+                      Rating (1-5)
+                      <input
+                        v-model="meals.form.rating"
+                        type="number"
+                        min="1"
+                        max="5"
+                        class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                        placeholder=""
+                      />
+                    </label>
+                  </div>
+                  <div class="flex flex-col gap-2">
+                    <label class="text-sm font-medium text-slate-200">Meal Title</label>
+                    <input
+                      v-model="meals.form.title"
+                      type="text"
+                      required
+                      class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                      placeholder="e.g., Chickpea Coconut Curry"
+                    />
+                  </div>
+                  <div class="flex flex-col gap-2">
+                    <label class="text-sm font-medium text-slate-200">Notes</label>
+                    <textarea
+                      v-model="meals.form.notes"
+                      rows="2"
+                      class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                      placeholder="What worked? What would you change next time?"
+                    ></textarea>
+                  </div>
+                  <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p class="text-sm" :class="meals.statusColor">{{ meals.status }}</p>
+                    <button
+                      type="submit"
+                      :disabled="meals.loading"
+                      class="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-500 disabled:cursor-not-allowed disabled:bg-primary-900"
+                    >
+                      <span class="i-lucide-plus"></span>
+                      <span>{{ meals.loading ? "Saving…" : "Save Meal" }}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+              <div class="flex flex-col gap-4">
+                <header class="flex items-center justify-between">
+                  <div>
+                    <h3 class="text-lg font-semibold text-white">Meal History</h3>
+                    <p class="text-sm text-slate-300">Update ratings or notes to refine future suggestions.</p>
+                  </div>
+                  <button
+                    @click="loadMeals"
+                    class="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700"
+                  >
+                    <span class="i-lucide-refresh-cw"></span>
+                    <span>Reload</span>
+                  </button>
+                </header>
+                <div v-if="meals.items.length === 0" class="rounded-xl border border-dashed border-slate-700 bg-slate-900/40 p-6 text-center text-sm text-slate-300">
+                  No meals recorded yet. Add your first review to start building history.
+                </div>
+                <div v-else class="space-y-4">
+                  <div
+                    v-for="meal in meals.items"
+                    :key="meal.date + meal.title"
+                    class="rounded-xl border border-slate-800 bg-slate-950/60 p-4 shadow-lg shadow-slate-900/30"
+                  >
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div class="space-y-1">
+                        <div class="flex items-center gap-2">
+                          <span class="rounded-lg bg-primary-600/20 px-2 py-0.5 text-xs font-medium text-primary-100">{{ meal.date }}</span>
+                          <h4 class="text-base font-semibold text-white">{{ meal.title }}</h4>
+                        </div>
+                        <div class="grid gap-3 sm:grid-cols-2">
+                          <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                            Rating (1-5)
+                            <input
+                              v-model="meal.editRating"
+                              type="number"
+                              min="1"
+                              max="5"
+                              class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                            />
+                          </label>
+                          <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                            Notes
+                            <textarea
+                              v-model="meal.editNotes"
+                              rows="2"
+                              class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                            ></textarea>
+                          </label>
+                        </div>
+                      </div>
+                      <div class="flex gap-2">
+                        <button
+                          @click="saveMeal(meal)"
+                          class="inline-flex items-center gap-2 rounded-lg border border-green-500/60 bg-green-500/20 px-3 py-2 text-sm font-semibold text-green-100 transition hover:bg-green-500/30"
+                        >
+                          <span class="i-lucide-save"></span>
+                          <span>Save</span>
+                        </button>
+                        <button
+                          @click="deleteMeal(meal)"
+                          class="inline-flex items-center gap-2 rounded-lg border border-red-500/60 bg-red-500/20 px-3 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-500/30"
+                        >
+                          <span class="i-lucide-trash"></span>
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
       </main>
 
@@ -722,6 +861,7 @@
               { id: "inventory", label: "Inventory", icon: "🧺" },
               { id: "preferences", label: "Preferences", icon: "⚙️" },
               { id: "receipts", label: "Receipts", icon: "🧾" },
+              { id: "meals", label: "Meals", icon: "🍽️" },
             ],
             currentTab: "planner",
             token: window.localStorage.getItem("remy_api_token") || "",
@@ -752,6 +892,13 @@
               suggestions: [],
               suggestionStatus: "Loading suggestions…",
               suggestionStatusColor: "text-slate-300",
+            },
+            meals: {
+              items: [],
+              status: "Loading meals…",
+              statusColor: "text-slate-300",
+              form: { date: new Date().toISOString().slice(0, 10), title: "", rating: "", notes: "" },
+              loading: false,
             },
             receipts: {
               items: [],
@@ -855,6 +1002,7 @@
               this.loadPreferences(),
               this.loadInventory(),
               this.loadReceipts(),
+              this.loadMeals(),
               this.loadSuggestions(),
             ]);
           },
@@ -1224,6 +1372,95 @@
             } catch (error) {
               this.inventory.suggestionStatus = `Error loading suggestions: ${error.message}`;
               this.inventory.suggestionStatusColor = "text-red-300";
+            }
+          },
+          async loadMeals() {
+            this.meals.loading = true;
+            this.meals.status = "Loading meals…";
+            this.meals.statusColor = "text-slate-300";
+            try {
+              const response = await fetch("/meals");
+              if (!response.ok) {
+                throw new Error(`Failed to load meals (${response.status})`);
+              }
+              const data = await response.json();
+              this.meals.items = Array.isArray(data)
+                ? data.map((meal) => ({ ...meal, editRating: meal.rating || "", editNotes: meal.notes || "" }))
+                : [];
+              this.meals.status = `${this.meals.items.length} recorded meal(s).`;
+              this.meals.statusColor = "text-slate-300";
+            } catch (error) {
+              this.meals.status = `Error loading meals: ${error.message}`;
+              this.meals.statusColor = "text-red-300";
+            } finally {
+              this.meals.loading = false;
+            }
+          },
+          async saveMeal(meal) {
+            this.meals.status = "Saving meal…";
+            this.meals.statusColor = "text-primary-300";
+            try {
+              const payload = {
+                date: meal.date,
+                title: meal.title,
+                rating: meal.editRating !== "" ? Number(meal.editRating) : null,
+                notes: meal.editNotes?.trim() ? meal.editNotes.trim() : null,
+              };
+              const response = await fetch("/meals", {
+                method: "POST",
+                headers: this.authHeaders({ "Content-Type": "application/json" }),
+                body: JSON.stringify(payload),
+              });
+              if (!response.ok) {
+                const detail = await response.json().catch(() => ({}));
+                throw new Error(detail?.detail || `Status ${response.status}`);
+              }
+              this.meals.status = "Meal saved.";
+              this.meals.statusColor = "text-green-300";
+              await this.loadMeals();
+            } catch (error) {
+              this.meals.status = `Error saving meal: ${error.message}`;
+              this.meals.statusColor = "text-red-300";
+            }
+          },
+          async addMeal() {
+            if (!this.meals.form.title.trim()) {
+              this.meals.status = "Enter a meal title.";
+              this.meals.statusColor = "text-red-300";
+              return;
+            }
+            await this.saveMeal({
+              date: this.meals.form.date,
+              title: this.meals.form.title.trim(),
+              editRating: this.meals.form.rating !== "" ? Number(this.meals.form.rating) : null,
+              editNotes: this.meals.form.notes,
+            });
+            this.meals.form = {
+              date: new Date().toISOString().slice(0, 10),
+              title: "",
+              rating: "",
+              notes: "",
+            };
+          },
+          async deleteMeal(meal) {
+            if (!window.confirm(`Delete meal ${meal.title}?`)) {
+              return;
+            }
+            try {
+              const response = await fetch(`/meals?date=${meal.date}&title=${encodeURIComponent(meal.title)}`, {
+                method: "DELETE",
+                headers: this.authHeaders(),
+              });
+              if (!response.ok) {
+                const detail = await response.json().catch(() => ({}));
+                throw new Error(detail?.detail || `Status ${response.status}`);
+              }
+              this.meals.status = "Meal deleted.";
+              this.meals.statusColor = "text-green-300";
+              await this.loadMeals();
+            } catch (error) {
+              this.meals.status = `Error deleting meal: ${error.message}`;
+              this.meals.statusColor = "text-red-300";
             }
           },
           async approveSuggestion(suggestion, overrides = {}) {
