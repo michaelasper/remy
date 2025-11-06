@@ -55,6 +55,9 @@ skip_covered = true
 minversion = "7.0"
 addopts = "-ra"
 testpaths = ["tests"]
+markers = [
+    "real_ocr: requires local Tesseract binary",
+]
 
 [tool.ruff]
 line-length = 100

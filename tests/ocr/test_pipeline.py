@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import io
+import shutil
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from PIL import Image
 
+from remy.config import get_settings
 from remy.db.receipts import get_receipt_ocr, store_receipt
+from remy.db.repository import reset_repository_state
 from remy.models.receipt import ReceiptStructuredData
+from remy.ocr.parser import ReceiptParser
 from remy.ocr.pipeline import ReceiptOcrService
 
 
@@ -21,7 +26,11 @@ def _create_image_bytes() -> bytes:
 
 
 @pytest.fixture(autouse=True)
-def stub_pytesseract(monkeypatch):
+def stub_pytesseract(monkeypatch, request):
+    if request.node.get_closest_marker("real_ocr"):
+        yield
+        return
+
     from remy.ocr import pipeline
 
     class DummyPytesseract:
@@ -94,3 +103,40 @@ def test_process_receipt_unsupported_format():
     assert result.status == "failed"
     assert result.metadata.get("reason") == "unsupported"
     assert "not an image" in (result.error_message or "")
+
+
+@pytest.mark.real_ocr
+def test_process_real_receipt_image(tmp_path, monkeypatch):
+    pytest.importorskip("pytesseract")
+    from pytesseract import get_tesseract_version
+
+    if not shutil.which("tesseract"):
+        pytest.skip("tesseract binary not available")
+    try:
+        get_tesseract_version()
+    except Exception:  # pragma: no cover
+        pytest.skip("pytesseract cannot reach tesseract executable")
+
+    db_path = tmp_path / "ocr_image.db"
+    monkeypatch.setenv("REMY_DATABASE_PATH", str(db_path))
+    get_settings.cache_clear()
+    reset_repository_state()
+
+    image_bytes = Path("tests/fixtures/receipts/receipt.png").read_bytes()
+    receipt = store_receipt(
+        filename="receipt.png",
+        content_type="image/png",
+        content=image_bytes,
+    )
+
+    service = ReceiptOcrService(parser=ReceiptParser())
+    result = service.process_receipt(receipt.id)
+
+    ocr_again = get_receipt_ocr(receipt.id)
+    assert ocr_again.status == result.status
+    assert ocr_again.metadata is not None
+
+    if result.status == "succeeded":
+        assert result.text
+        parsed = result.metadata.get("parsed") if result.metadata else None
+        assert parsed is not None
