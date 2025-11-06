@@ -13,7 +13,7 @@ Remy is a multi-agent automation platform that assembles a daily dinner plan for
 
 - Install Python 3.11 (use `pyenv install 3.11.9` and respect `.python-version`, or spin up `.venv` via `python3 -m venv .venv && source .venv/bin/activate`).
 - Install dependencies with `pip install -e .[dev]` after activating your environment; add server extras with `pip install -e .[server]` if you plan to run Uvicorn directly.
-- Install Tesseract OCR locally (`brew install tesseract` on macOS, `sudo apt-get install tesseract-ocr` on Debian/Ubuntu). The project Docker image installs the same runtime out of the box.
+- Install Tesseract OCR locally (`brew install tesseract` on macOS, `sudo apt-get install tesseract-ocr` on Debian/Ubuntu). The project Docker image installs Tesseract and Poppler so OCR works inside Docker/Compose without extra steps.
 - Install Poppler utilities for PDF support (`brew install poppler` or `sudo apt-get install poppler-utils`) so `pdf2image` can rasterize multi-page receipts.
 - Configure `REMY_OCR_ARCHIVE_PATH` (defaults to `./data/receipts_archive`) if you want processed receipt blobs archived outside SQLite.
 - Run the smoke test suite with `pytest` to validate the scaffolding.

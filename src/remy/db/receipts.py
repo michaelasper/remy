@@ -245,6 +245,9 @@ def _ensure_receipt_columns(session) -> None:
         # Legacy schema; nothing to do since content column is required for earlier versions.
         return
     if "content_path" not in column_names:
-        session.execute("ALTER TABLE receipts ADD COLUMN content_path TEXT")
+        try:
+            session.execute(text("ALTER TABLE receipts ADD COLUMN content_path TEXT"))
+        except Exception:
+            session.rollback()
     # SQLite cannot alter column nullability directly; new code handles NULL
     # content by reading from archived blobs when necessary.
