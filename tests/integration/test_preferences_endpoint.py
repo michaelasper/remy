@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from fastapi import status
 
+from tests.integration.utils import auth_headers
+
 
 def test_preferences_round_trip(client):
     response = client.get("/preferences")
@@ -16,7 +18,7 @@ def test_preferences_round_trip(client):
         "max_time_min": 40,
         "allergens": ["peanut", "sesame"],
     }
-    response = client.put("/preferences", json=update_payload)
+    response = client.put("/preferences", json=update_payload, headers=auth_headers())
     assert response.status_code == status.HTTP_200_OK
     updated = response.json()
     assert updated["diet"] == "vegetarian"
@@ -35,7 +37,7 @@ def test_preferences_accepts_string_allergens(client):
         "max_time_min": 60,
         "allergens": "peanut, sesame",
     }
-    response = client.put("/preferences", json=payload)
+    response = client.put("/preferences", json=payload, headers=auth_headers())
     assert response.status_code == status.HTTP_200_OK
     body = response.json()
     assert body["allergens"] == ["peanut", "sesame"]

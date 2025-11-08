@@ -12,10 +12,7 @@ from remy.db.meals import record_meal
 from remy.db.preferences import save_preferences
 from remy.models.context import Preferences, RecentMeal
 
-
-def _auth_headers():
-    token = get_settings().api_token
-    return {"Authorization": f"Bearer {token}"} if token else {}
+from tests.integration.utils import auth_headers
 
 
 def _iso_today() -> str:
@@ -34,7 +31,7 @@ def test_planning_context_endpoint_uses_db_data(client):
             "time_window": "evening",
             "recent_meals": 1,
         },
-        headers=_auth_headers(),
+        headers=auth_headers(),
     )
 
     assert response.status_code == status.HTTP_200_OK
@@ -51,7 +48,7 @@ def test_planning_context_endpoint_uses_db_data(client):
 
 
 def test_planning_context_defaults_when_params_missing(client):
-    response = client.get("/planning-context", headers=_auth_headers())
+    response = client.get("/planning-context", headers=auth_headers())
 
     assert response.status_code == status.HTTP_200_OK
     payload = response.json()
@@ -63,7 +60,7 @@ def test_planning_context_defaults_when_params_missing(client):
 def test_planning_context_includes_leftovers(client):
     create_leftover_item(name="garlic mash", quantity=400, unit="g")
 
-    response = client.get("/planning-context", headers=_auth_headers())
+    response = client.get("/planning-context", headers=auth_headers())
     assert response.status_code == status.HTTP_200_OK
     leftovers = response.json()["leftovers"]
     assert leftovers
@@ -79,7 +76,7 @@ def test_planning_context_supports_preference_overrides(client):
         ("preferred_cuisines", "thai"),
         ("preferred_cuisines", "mexican"),
     ]
-    response = client.get("/planning-context", headers=_auth_headers(), params=params)
+    response = client.get("/planning-context", headers=auth_headers(), params=params)
     assert response.status_code == status.HTTP_200_OK
     payload = response.json()
     assert payload["prefs"]["diet"] == "keto"
@@ -92,7 +89,7 @@ def test_planning_context_supports_preference_overrides(client):
 def test_planning_context_includes_recipe_search_overrides(client):
     response = client.get(
         "/planning-context",
-        headers=_auth_headers(),
+        headers=auth_headers(),
         params={
             "recipe_search": "true",
             "search_keywords": ["sheet pan", "citrus chicken"],

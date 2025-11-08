@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from fastapi import status
 
+from tests.integration.utils import auth_headers
+
 
 def test_inventory_endpoint_returns_items(client):
     response = client.get("/inventory")
@@ -30,17 +32,21 @@ def test_inventory_create_update_delete_flow(client):
         "unit": "can",
         "best_before": "2026-01-01",
     }
-    response = client.post("/inventory", json=create_payload)
+    response = client.post("/inventory", json=create_payload, headers=auth_headers())
     assert response.status_code == status.HTTP_201_CREATED
     created = response.json()
     item_id = created["id"]
     assert created["name"] == "canned tomatoes"
 
-    response = client.put(f"/inventory/{item_id}", json={"quantity": 3})
+    response = client.put(
+        f"/inventory/{item_id}",
+        json={"quantity": 3},
+        headers=auth_headers(),
+    )
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["qty"] == 3
 
-    response = client.delete(f"/inventory/{item_id}")
+    response = client.delete(f"/inventory/{item_id}", headers=auth_headers())
     assert response.status_code == status.HTTP_204_NO_CONTENT
 
     # Ensure the item no longer exists

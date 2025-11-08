@@ -7,11 +7,13 @@ from fastapi import status
 from remy.db.receipts import update_receipt_ocr
 from remy.server import deps
 
+from tests.integration.utils import auth_headers
+
 
 def test_receipt_upload_and_download_round_trip(client):
     files = {"file": ("receipt.txt", b"store receipt", "text/plain")}
     data = {"notes": "weekly groceries"}
-    response = client.post("/receipts", files=files, data=data)
+    response = client.post("/receipts", files=files, data=data, headers=auth_headers())
     assert response.status_code == status.HTTP_201_CREATED
     payload = response.json()
     receipt_id = payload["id"]
@@ -36,14 +38,14 @@ def test_receipt_upload_and_download_round_trip(client):
 
 def test_receipt_upload_empty_file_rejected(client):
     files = {"file": ("empty.txt", b"", "text/plain")}
-    response = client.post("/receipts", files=files)
+    response = client.post("/receipts", files=files, headers=auth_headers())
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert "empty" in response.json()["detail"].lower()
 
 
 def test_receipt_ocr_endpoints(client):
     files = {"file": ("receipt.png", b"\x89PNG\r\n\x1a\n", "image/png")}
-    upload_response = client.post("/receipts", files=files)
+    upload_response = client.post("/receipts", files=files, headers=auth_headers())
     receipt_id = upload_response.json()["id"]
 
     status_response = client.get(f"/receipts/{receipt_id}/ocr")
@@ -59,7 +61,10 @@ def test_receipt_ocr_endpoints(client):
         )
 
     client.app.dependency_overrides[deps.get_receipt_ocr_processor] = lambda: fake_processor
-    process_response = client.post(f"/receipts/{receipt_id}/ocr")
+    process_response = client.post(
+        f"/receipts/{receipt_id}/ocr",
+        headers=auth_headers(),
+    )
     assert process_response.status_code == status.HTTP_200_OK
     assert process_response.json()["status"] == "succeeded"
     client.app.dependency_overrides.pop(deps.get_receipt_ocr_processor, None)
@@ -67,7 +72,7 @@ def test_receipt_ocr_endpoints(client):
 
 def test_receipt_ingest_endpoint(client):
     files = {"file": ("ingest.png", b"\x89PNG\r\n\x1a\n", "image/png")}
-    upload_response = client.post("/receipts", files=files)
+    upload_response = client.post("/receipts", files=files, headers=auth_headers())
     receipt_id = upload_response.json()["id"]
 
     update_receipt_ocr(
@@ -96,6 +101,7 @@ def test_receipt_ingest_endpoint(client):
                 {"name": "Test Apples", "quantity": 2.0, "unit": "kg", "inventory_match_id": None}
             ]
         },
+        headers=auth_headers(),
     )
     assert ingest_response.status_code == status.HTTP_200_OK
     payload = ingest_response.json()
@@ -111,6 +117,7 @@ def test_receipt_ingest_endpoint(client):
     approve_response = client.post(
         f"/inventory/suggestions/{suggestion_id}/approve",
         json={},
+        headers=auth_headers(),
     )
     assert approve_response.status_code == status.HTTP_200_OK
 

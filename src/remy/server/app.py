@@ -221,7 +221,7 @@ def create_app() -> FastAPI:
         summary="Assemble planning context",
     )
     def planning_context_endpoint(
-        context_date: Optional[date] = Query(default=None),
+        context_date: Optional[date] = Query(default=None, alias="date"),
         attendees: Optional[int] = Query(default=None, ge=1),
         time_window: Optional[str] = Query(default=None, min_length=1, max_length=64),
         recent_meals: int = Query(default=14, ge=0, le=60),

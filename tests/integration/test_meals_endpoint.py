@@ -6,6 +6,8 @@ from datetime import date
 
 from fastapi import status
 
+from tests.integration.utils import auth_headers
+
 
 def test_meals_crud_flow(client):
     response = client.get("/meals")
@@ -18,7 +20,7 @@ def test_meals_crud_flow(client):
         "rating": 4,
         "notes": "Nice and spicy",
     }
-    create_response = client.post("/meals", json=payload)
+    create_response = client.post("/meals", json=payload, headers=auth_headers())
     assert create_response.status_code == status.HTTP_201_CREATED
     created = create_response.json()
     assert created["title"] == "Test Curry"
@@ -33,6 +35,7 @@ def test_meals_crud_flow(client):
             "rating": 5,
             "notes": "Even better the next day",
         },
+        headers=auth_headers(),
     )
     assert updated_response.status_code == status.HTTP_201_CREATED
     assert updated_response.json()["rating"] == 5
@@ -44,7 +47,8 @@ def test_meals_crud_flow(client):
     assert any(meal["title"] == "Test Curry" for meal in meals)
 
     delete_response = client.delete(
-        f"/meals?date={payload['date']}&title={payload['title']}"
+        f"/meals?date={payload['date']}&title={payload['title']}",
+        headers=auth_headers(),
     )
     assert delete_response.status_code == status.HTTP_204_NO_CONTENT
 
