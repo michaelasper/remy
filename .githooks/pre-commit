@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${REMY_SKIP_GIT_HOOKS:-}" == "1" ]]; then
+  echo "[remy-pre-commit] Skipping lint/typecheck (REMY_SKIP_GIT_HOOKS=1)."
+  exit 0
+fi
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+run_target() {
+  local target="$1"
+  echo "[remy-pre-commit] make ${target}"
+  if ! make "${target}"; then
+    echo "[remy-pre-commit] make ${target} failed; fix the kitchen before committing."
+    exit 1
+  fi
+}
+
+run_target lint
+run_target typecheck

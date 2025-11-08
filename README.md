@@ -14,19 +14,24 @@ Remy is a FastAPI + Vue sous-chefâ€”named after the tiny rat from *Ratatouille*â
    python3 -m venv .venv && source .venv/bin/activate
    pip install -e .[dev]
    ```
-2. **Seed dependencies**
+2. **Install git hooks**
+   ```bash
+   git config core.hooksPath .githooks
+   ```
+   Every commit now runs `make lint` and `make typecheck`. Set `REMY_SKIP_GIT_HOOKS=1` to bypass in emergencies.
+3. **Seed dependencies**
    ```bash
    make bootstrap      # optional helpers (lint/test targets)
    make llamacpp-setup # download default GGUF + start llama.cpp (once)
    ```
-3. **Run the app**
+4. **Run the app**
    ```bash
    uvicorn remy.server.app:app --reload
    ```
    Visit `http://localhost:8000/` for the planner UI.  
    Use `Authorization: Bearer <REMY_API_TOKEN>` on protected endpoints.
 
-4. **Generate a plan from the CLI**
+5. **Generate a plan from the CLI**
    ```bash
    remy plan path/to/context.json --pretty
    ```

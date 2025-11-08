@@ -6,7 +6,6 @@ from fastapi import status
 
 from remy.db.receipts import update_receipt_ocr
 from remy.server import deps
-
 from tests.integration.utils import auth_headers
 
 

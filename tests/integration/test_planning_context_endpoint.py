@@ -6,12 +6,10 @@ from datetime import date
 
 from fastapi import status
 
-from remy.config import get_settings
 from remy.db.leftovers import create_leftover_item
 from remy.db.meals import record_meal
 from remy.db.preferences import save_preferences
 from remy.models.context import Preferences, RecentMeal
-
 from tests.integration.utils import auth_headers
 
 
