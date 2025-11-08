@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 
 from remy.models.context import InventoryItem
+from remy.models.receipt import ReceiptLineItem
 from remy.ocr.parser import ReceiptParser
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "receipts"
@@ -124,3 +125,55 @@ Ginger $1.05
         "ginger",
     }
     assert expected.issubset(names)
+
+
+class _StubReceiptLLM:
+    def __init__(self, items: list[ReceiptLineItem]):
+        self._items = items
+
+    def parse_items(self, ocr_text, baseline_items):
+        return self._items
+
+
+def test_llm_items_are_added_when_missing():
+    sample_text = """
+    FUTURE MARKET
+    Fancy Granola Organic
+    TOTAL 8.99
+    """.strip()
+
+    llm_item = ReceiptLineItem(
+        raw_text="Fancy Granola Organic 1 box 8.99",
+        name="Fancy Granola Organic",
+        quantity=1.0,
+        unit="box",
+        total_price=8.99,
+        confidence=0.9,
+    )
+    parser = ReceiptParser(llm_client=_StubReceiptLLM([llm_item]))
+    result = parser.parse(sample_text)
+
+    assert any("granola" in item.name.lower() for item in result.items)
+
+
+def test_llm_enhancements_merge_with_existing_items():
+    sample_text = """
+    GREENS SHOP
+    Cherry Tomatoes ............ 4.50
+    """.strip()
+
+    llm_item = ReceiptLineItem(
+        raw_text="Cherry Tomatoes 2 pint 4.50",
+        name="Cherry Tomatoes",
+        quantity=2.0,
+        unit="pint",
+        total_price=4.50,
+        confidence=0.95,
+    )
+    parser = ReceiptParser(llm_client=_StubReceiptLLM([llm_item]))
+    result = parser.parse(sample_text)
+
+    match = next((item for item in result.items if "cherry tomatoes" in item.name.lower()), None)
+    assert match is not None
+    assert match.quantity == 2.0
+    assert match.unit.lower() == "pint"

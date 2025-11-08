@@ -13,6 +13,7 @@ from rapidfuzz import fuzz, process
 from remy.db.inventory import list_inventory
 from remy.models.context import InventoryItem
 from remy.models.receipt import ReceiptLineItem, ReceiptStructuredData
+from remy.ocr.llm_client import ReceiptLLMClient
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,12 @@ def _normalize_line(line: str) -> str:
     return re.sub(r"\s+", " ", line).strip()
 
 
+def _canonical_name(value: str) -> str:
+    collapsed = re.sub(r"\s+", " ", value).strip().lower()
+    no_punct = re.sub(r"[^\w\s]", " ", collapsed)
+    return re.sub(r"\s+", " ", no_punct).strip()
+
+
 @dataclasses.dataclass
 class InventoryMatch:
     item_id: int
@@ -70,10 +77,12 @@ class ReceiptParser:
         *,
         inventory_provider: Callable[[], Iterable[InventoryItem]] = list_inventory,
         fuzzy_threshold: float = 70.0,
+        llm_client: ReceiptLLMClient | None = None,
     ) -> None:
         self._inventory_provider = inventory_provider
         self._fuzzy_threshold = fuzzy_threshold
         self._inventory_cache: Optional[List[InventoryItem]] = None
+        self._llm_client = llm_client
 
     def parse(self, text: str) -> ReceiptStructuredData:
         lines = [_normalize_line(line) for line in text.splitlines()]
@@ -114,6 +123,7 @@ class ReceiptParser:
             items.append(parsed)
 
         self._augment_known_products(text, items)
+        items = self._apply_llm_enhancements(text, items)
 
         return ReceiptStructuredData(
             store_name=store_name,
@@ -252,10 +262,10 @@ class ReceiptParser:
         return InventoryMatch(item_id=matched_item.id, name=matched_name, score=score)
 
     def _augment_known_products(self, text: str, items: List[ReceiptLineItem]) -> None:
-        existing = {_normalize_line(item.name) for item in items}
+        existing = {_normalize_line(item.name).strip().lower() for item in items}
         lowered = text.lower()
         for canonical, patterns in _KNOWN_PRODUCTS.items():
-            normalized = _normalize_line(canonical)
+            normalized = canonical.strip().lower()
             if normalized in existing:
                 continue
             if any(re.search(pattern, lowered) for pattern in patterns):
@@ -271,6 +281,53 @@ class ReceiptParser:
                     )
                 )
                 existing.add(normalized)
+
+    def _apply_llm_enhancements(
+        self,
+        text: str,
+        items: List[ReceiptLineItem],
+    ) -> List[ReceiptLineItem]:
+        if not self._llm_client:
+            return items
+        try:
+            llm_items = self._llm_client.parse_items(text, items)
+        except Exception as exc:
+            logger.warning("Receipt LLM enhancement failed: %s", exc)
+            return items
+        if not llm_items:
+            return items
+        return self._merge_llm_items(items, llm_items)
+
+    def _merge_llm_items(
+        self,
+        base_items: List[ReceiptLineItem],
+        llm_items: List[ReceiptLineItem],
+    ) -> List[ReceiptLineItem]:
+        normalized = {_canonical_name(item.name): item for item in base_items}
+        for candidate in llm_items:
+            key = _canonical_name(candidate.name)
+            existing = normalized.get(key)
+            if existing:
+                if existing.quantity is None and candidate.quantity is not None:
+                    existing.quantity = candidate.quantity
+                if not existing.unit and candidate.unit:
+                    existing.unit = candidate.unit
+                if existing.total_price is None and candidate.total_price is not None:
+                    existing.total_price = candidate.total_price
+                if existing.unit_price is None and candidate.unit_price is not None:
+                    existing.unit_price = candidate.unit_price
+                existing.confidence = max(existing.confidence, candidate.confidence)
+                continue
+
+            match = self._match_inventory(candidate.name)
+            if match:
+                candidate.inventory_match_id = match.item_id
+                candidate.inventory_match_name = match.name
+                candidate.inventory_match_score = match.score
+                candidate.confidence = max(candidate.confidence, min(1.0, match.score / 100))
+            base_items.append(candidate)
+            normalized[key] = candidate
+        return base_items
 
     def _get_inventory(self) -> List[InventoryItem]:
         if self._inventory_cache is None:

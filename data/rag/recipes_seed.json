@@ -1,0 +1,177 @@
+[
+  {
+    "title": "Smoky Chickpea Harissa Bowls",
+    "summary": "Protein-rich chickpeas baked with harissa and served over lemony greens.",
+    "ingredients": [
+      "2 cups cooked chickpeas",
+      "2 tablespoons harissa paste",
+      "1 teaspoon smoked paprika",
+      "3 cups baby spinach",
+      "1 lemon",
+      "1/4 cup toasted almonds",
+      "Greek yogurt for serving"
+    ],
+    "instructions": [
+      "Toss chickpeas with harissa, olive oil, and smoked paprika and roast until crisp.",
+      "Dress spinach with lemon juice, zest, and a pinch of salt.",
+      "Serve chickpeas over greens with yogurt and almonds."
+    ],
+    "source": "seed"
+  },
+  {
+    "title": "Garlic Butter Shrimp Orzo",
+    "summary": "One-pan buttery orzo loaded with garlic shrimp and lemon.",
+    "ingredients": [
+      "1 pound shrimp",
+      "1 cup orzo",
+      "4 cloves garlic",
+      "2 cups vegetable broth",
+      "2 tablespoons butter",
+      "1/4 cup parsley",
+      "1 lemon"
+    ],
+    "instructions": [
+      "Sear shrimp with butter and garlic until pink; set aside.",
+      "Toast orzo, add broth, and simmer until tender.",
+      "Fold shrimp, parsley, and lemon zest into the orzo."
+    ]
+  },
+  {
+    "title": "Miso Maple Salmon with Sesame Broccoli",
+    "summary": "Sheet-pan salmon glazed with miso-maple sauce alongside sesame broccoli.",
+    "ingredients": [
+      "4 salmon fillets",
+      "2 tablespoons white miso",
+      "2 tablespoons maple syrup",
+      "1 tablespoon rice vinegar",
+      "3 cups broccoli florets",
+      "1 tablespoon sesame oil",
+      "Sesame seeds"
+    ],
+    "instructions": [
+      "Whisk miso, maple, vinegar, and soy sauce to glaze salmon.",
+      "Roast broccoli tossed with sesame oil until tender-crisp.",
+      "Add salmon to tray, brush with glaze, and roast until flaky; garnish with seeds."
+    ]
+  },
+  {
+    "title": "Spring Pea Risotto with Mint",
+    "summary": "Creamy Arborio rice folded with peas, parmesan, and fresh mint.",
+    "ingredients": [
+      "1 cup Arborio rice",
+      "1 small onion",
+      "1 cup peas",
+      "4 cups vegetable stock",
+      "1/2 cup grated parmesan",
+      "2 tablespoons butter",
+      "Fresh mint"
+    ],
+    "instructions": [
+      "Sauté onion and rice in butter; ladle warm stock until creamy.",
+      "Fold in peas, parmesan, and mint right before serving."
+    ]
+  },
+  {
+    "title": "Grilled Halloumi Tabbouleh Wraps",
+    "summary": "Herby bulgur salad wrapped with charred halloumi and crisp vegetables.",
+    "ingredients": [
+      "6 ounces halloumi cheese",
+      "1 cup cooked bulgur",
+      "1 bunch parsley",
+      "Mint leaves",
+      "Cherry tomatoes",
+      "Cucumbers",
+      "Whole wheat wraps",
+      "Lemon-tahini sauce"
+    ],
+    "instructions": [
+      "Prepare tabbouleh with bulgur, parsley, mint, tomatoes, cucumbers, and lemon.",
+      "Grill sliced halloumi until golden and assemble inside warmed wraps with sauce."
+    ]
+  },
+  {
+    "title": "Turmeric Coconut Lentil Soup",
+    "summary": "Golden lentils simmered with coconut milk, turmeric, and ginger.",
+    "ingredients": [
+      "1 cup red lentils",
+      "1 can coconut milk",
+      "1 tablespoon grated ginger",
+      "2 teaspoons turmeric",
+      "4 cups vegetable broth",
+      "Spinach",
+      "Lime wedges"
+    ],
+    "instructions": [
+      "Bloom turmeric, ginger, and garlic; add lentils and broth and simmer until tender.",
+      "Finish with coconut milk and spinach; serve with lime."
+    ]
+  },
+  {
+    "title": "Charred Corn Elote Pasta Salad",
+    "summary": "Crew-cut pasta tossed with charred corn, cotija, cilantro, and lime crema.",
+    "ingredients": [
+      "12 ounces short pasta",
+      "4 ears corn",
+      "1/3 cup mayonnaise",
+      "1/3 cup sour cream",
+      "Chile powder",
+      "Cotija cheese",
+      "Cilantro",
+      "Lime"
+    ],
+    "instructions": [
+      "Grill corn until charred, then shave kernels.",
+      "Whisk mayo, sour cream, lime, and chile powder; toss with pasta, corn, cotija, and cilantro."
+    ]
+  },
+  {
+    "title": "Hoisan Glazed Tofu Lettuce Cups",
+    "summary": "Crispy tofu tossed with hoisin sauce served in crunchy lettuce.",
+    "ingredients": [
+      "16 ounces firm tofu",
+      "1/4 cup hoisin sauce",
+      "2 tablespoons soy sauce",
+      "2 teaspoons grated ginger",
+      "Butter lettuce leaves",
+      "Shredded carrots",
+      "Scallions"
+    ],
+    "instructions": [
+      "Crisp tofu cubes, then glaze with hoisin, soy, and ginger.",
+      "Spoon into lettuce with carrots and scallions."
+    ]
+  },
+  {
+    "title": "Za'atar Roasted Chicken with Sumac Onions",
+    "summary": "Sheet-pan chicken thighs roasted with za'atar and sweet onions.",
+    "ingredients": [
+      "4 chicken thighs",
+      "2 tablespoons za'atar",
+      "1 red onion",
+      "Sumac",
+      "Olive oil",
+      "Yogurt sauce"
+    ],
+    "instructions": [
+      "Toss chicken with za'atar, lemon, and oil; roast with onion wedges.",
+      "Finish onions with sumac and serve with yogurt sauce."
+    ]
+  },
+  {
+    "title": "Roasted Cauliflower Puttanesca",
+    "summary": "Briny tomato sauce folded with roasted cauliflower and herbs over pasta.",
+    "ingredients": [
+      "1 head cauliflower",
+      "12 ounces spaghetti",
+      "1 can crushed tomatoes",
+      "4 anchovies",
+      "Capers",
+      "Kalamata olives",
+      "Parsley"
+    ],
+    "instructions": [
+      "Roast cauliflower florets until browned.",
+      "Simmer tomatoes with garlic, anchovies, capers, and olives; fold in cauliflower and toss with pasta."
+    ]
+  }
+]

@@ -22,7 +22,7 @@ COMPOSE ?= docker-compose
 DEVTOOLS ?= $(PYTHON) -m remy.devtools
 LLAMACPP_SERVICE ?= llamacpp
 
-.PHONY: install install-dev install-server test test-e2e lint typecheck format run-server docker-build docker-run compose-up compose-down compose-logs check coverage clean bootstrap doctor ocr ocr-worker llamacpp-setup
+.PHONY: install install-dev install-server test test-e2e lint typecheck format run-server docker-build docker-run compose-up compose-down compose-logs check coverage clean bootstrap doctor ocr ocr-worker llamacpp-setup rag-setup
 
 install:
 	$(PIP) install -e .
@@ -143,3 +143,6 @@ llamacpp-setup:
 		$(DOCKER) compose up -d $(LLAMACPP_SERVICE); \
 	fi
 	@echo "llama.cpp service is starting in Docker Compose (model download handled by the container entrypoint)."
+
+rag-setup:
+	$(PYTHON) -m remy.rag.setup

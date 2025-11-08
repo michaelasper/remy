@@ -23,7 +23,8 @@ dependencies = [
     "pdf2image>=1.17",
     "rapidfuzz>=3.6",
     "prometheus-client>=0.19"
-    ,"duckduckgo-search>=6.1"
+    ,"duckduckgo-search>=6.1",
+    "numpy>=1.26"
 ]
 
 [project.optional-dependencies]

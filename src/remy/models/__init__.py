@@ -23,6 +23,7 @@ from remy.models.receipt import (
     ReceiptOcrResult,
     ReceiptStructuredData,
 )
+from remy.models.shopping import ShoppingListItem
 
 __all__ = [
     "Constraints",
@@ -42,4 +43,5 @@ __all__ = [
     "ReceiptOcrResult",
     "ReceiptStructuredData",
     "InventorySuggestion",
+    "ShoppingListItem",
 ]

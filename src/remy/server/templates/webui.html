@@ -486,6 +486,243 @@
             </div>
           </section>
 
+          <!-- Shopping List -->
+          <section
+            v-if="currentTab === 'shopping'"
+            class="rounded-2xl border border-slate-800 bg-slate-900/60 shadow-2xl shadow-primary-900/10 backdrop-blur-sm"
+          >
+            <div class="grid gap-6 p-6 lg:grid-cols-[1fr,2fr]">
+              <div class="flex flex-col gap-4">
+                <header class="space-y-2">
+                  <h2 class="text-xl font-semibold text-white">Smart Shopping List</h2>
+                  <p class="text-sm text-slate-300">
+                    Keep a lightweight checklist while you shop, then add everything into inventory with a tap.
+                  </p>
+                  <p class="text-xs" :class="shopping.statusColor">{{ shopping.status }}</p>
+                </header>
+                <form
+                  @submit.prevent="createShoppingItem"
+                  class="grid gap-4 rounded-2xl border border-slate-800 bg-slate-950/40 p-4"
+                >
+                  <div class="flex flex-col gap-2">
+                    <label class="text-sm font-medium text-slate-200">Item name</label>
+                    <input
+                      v-model="shopping.form.name"
+                      type="text"
+                      required
+                      class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                      placeholder="e.g., salmon fillets"
+                    />
+                  </div>
+                  <div class="grid gap-4 sm:grid-cols-2">
+                    <div class="flex flex-col gap-2">
+                      <label class="text-sm font-medium text-slate-200">Quantity (optional)</label>
+                      <input
+                        v-model="shopping.form.quantity"
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                        placeholder="2"
+                      />
+                    </div>
+                    <div class="flex flex-col gap-2">
+                      <label class="text-sm font-medium text-slate-200">Unit</label>
+                      <input
+                        v-model="shopping.form.unit"
+                        type="text"
+                        class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                        placeholder="ea, g, ml…"
+                      />
+                    </div>
+                  </div>
+                  <div class="flex flex-col gap-2">
+                    <label class="text-sm font-medium text-slate-200">Notes</label>
+                    <textarea
+                      v-model="shopping.form.notes"
+                      rows="2"
+                      class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                      placeholder="Brand, aisle, reminder…"
+                    ></textarea>
+                  </div>
+                  <button
+                    type="submit"
+                    :disabled="shopping.loading"
+                    class="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-500 disabled:cursor-not-allowed disabled:bg-primary-900"
+                  >
+                    <span class="i-lucide-plus"></span>
+                    <span>{{ shopping.loading ? "Saving…" : "Add to List" }}</span>
+                  </button>
+                </form>
+                <div class="rounded-2xl border border-slate-800 bg-slate-950/30 p-4">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Quick actions</h3>
+                      <p class="text-xs text-slate-500">One tap reset + manual refresh when offline.</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        @click="resetShoppingList"
+                        :disabled="shopping.loading"
+                        class="inline-flex items-center gap-2 rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-100 transition hover:bg-red-500/20 disabled:cursor-not-allowed"
+                      >
+                        <span>Reset List</span>
+                      </button>
+                      <button
+                        type="button"
+                        @click="loadShoppingList"
+                        :disabled="shopping.loading"
+                        class="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed"
+                      >
+                        <span>Refresh</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="space-y-6">
+                <div class="space-y-3">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <h3 class="text-lg font-semibold text-white">In your cart</h3>
+                      <p class="text-xs text-slate-400">Tap the checkbox as you pick things up.</p>
+                    </div>
+                    <span class="text-sm text-slate-400">{{ shoppingActiveItems.length }} active</span>
+                  </div>
+                  <div
+                    v-if="!shoppingActiveItems.length"
+                    class="rounded-2xl border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-400"
+                  >
+                    All caught up. Add any missing ingredients before you head out.
+                  </div>
+                  <div
+                    v-for="item in shoppingActiveItems"
+                    :key="`shopping-active-${item.id}`"
+                    class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-lg shadow-slate-900/20 space-y-3"
+                  >
+                    <div class="flex items-start gap-3">
+                      <button
+                        type="button"
+                        @click="toggleShoppingItem(item)"
+                        :disabled="isShoppingItemBusy(item.id)"
+                        class="mt-1 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-lg text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed"
+                      >
+                        <span class="i-lucide-check" v-if="item.is_checked"></span>
+                        <span v-else>○</span>
+                      </button>
+                      <div class="flex-1 space-y-1">
+                        <div class="flex items-center justify-between gap-3">
+                          <h4 class="text-lg font-semibold text-white">{{ item.name }}</h4>
+                          <span class="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
+                            {{ formatShoppingQuantity(item) || "as needed" }}
+                          </span>
+                        </div>
+                        <p v-if="item.notes" class="text-xs text-slate-400">{{ item.notes }}</p>
+                      </div>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        @click="addShoppingItemToInventory(item)"
+                        :disabled="isShoppingItemBusy(item.id)"
+                        class="inline-flex items-center gap-2 rounded-lg bg-green-600/80 px-3 py-2 text-sm font-semibold text-white transition hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        <span class="i-lucide-plus"></span>
+                        <span>Add to Inventory</span>
+                      </button>
+                      <button
+                        type="button"
+                        @click="toggleShoppingItem(item)"
+                        :disabled="isShoppingItemBusy(item.id)"
+                        class="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-100 transition hover:bg-slate-800 disabled:cursor-not-allowed"
+                      >
+                        <span>{{ item.is_checked ? "Mark Active" : "Mark Done" }}</span>
+                      </button>
+                      <button
+                        type="button"
+                        @click="deleteShoppingItem(item)"
+                        :disabled="isShoppingItemBusy(item.id)"
+                        class="inline-flex items-center gap-2 rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-500/20 disabled:cursor-not-allowed"
+                      >
+                        <span class="i-lucide-trash"></span>
+                        <span>Delete</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div class="space-y-3">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <h3 class="text-lg font-semibold text-white">Checked off</h3>
+                      <p class="text-xs text-slate-400">Reopen or push to inventory later.</p>
+                    </div>
+                    <span class="text-sm text-slate-400">{{ shoppingCompletedItems.length }} done</span>
+                  </div>
+                  <div
+                    v-if="!shoppingCompletedItems.length"
+                    class="rounded-2xl border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-400"
+                  >
+                    Nothing checked off yet—mark items as you shop.
+                  </div>
+                  <div
+                    v-for="item in shoppingCompletedItems"
+                    :key="`shopping-complete-${item.id}`"
+                    class="rounded-2xl border border-slate-800 bg-slate-950/30 p-4 space-y-3 opacity-80"
+                  >
+                    <div class="flex items-start gap-3">
+                      <button
+                        type="button"
+                        @click="toggleShoppingItem(item)"
+                        :disabled="isShoppingItemBusy(item.id)"
+                        class="mt-1 inline-flex h-9 w-9 items-center justify-center rounded-full border border-green-500/60 bg-green-500/10 text-lg text-green-200 transition hover:bg-green-500/20 disabled:cursor-not-allowed"
+                      >
+                        <span class="i-lucide-check"></span>
+                      </button>
+                      <div class="flex-1 space-y-1">
+                        <div class="flex items-center justify-between gap-3">
+                          <h4 class="text-base font-semibold text-slate-200">{{ item.name }}</h4>
+                          <span class="rounded-full bg-slate-900 px-2 py-0.5 text-xs text-slate-300">
+                            {{ formatShoppingQuantity(item) || "as needed" }}
+                          </span>
+                        </div>
+                        <p v-if="item.notes" class="text-xs text-slate-500">{{ item.notes }}</p>
+                      </div>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        @click="addShoppingItemToInventory(item)"
+                        :disabled="isShoppingItemBusy(item.id)"
+                        class="inline-flex items-center gap-2 rounded-lg bg-green-600/80 px-3 py-2 text-sm font-semibold text-white transition hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        <span class="i-lucide-plus"></span>
+                        <span>Add to Inventory</span>
+                      </button>
+                      <button
+                        type="button"
+                        @click="toggleShoppingItem(item)"
+                        :disabled="isShoppingItemBusy(item.id)"
+                        class="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-100 transition hover:bg-slate-800 disabled:cursor-not-allowed"
+                      >
+                        <span>Mark Active</span>
+                      </button>
+                      <button
+                        type="button"
+                        @click="deleteShoppingItem(item)"
+                        :disabled="isShoppingItemBusy(item.id)"
+                        class="inline-flex items-center gap-2 rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-500/20 disabled:cursor-not-allowed"
+                      >
+                        <span class="i-lucide-trash"></span>
+                        <span>Delete</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <!-- Preferences -->
           <section
             v-if="currentTab === 'preferences'"
@@ -1083,6 +1320,7 @@
             tabs: [
               { id: "planner", label: "Planner", icon: "✨" },
               { id: "inventory", label: "Inventory", icon: "🧺" },
+              { id: "shopping", label: "Shopping List", icon: "🛒" },
               { id: "preferences", label: "Preferences", icon: "⚙️" },
               { id: "receipts", label: "Receipts", icon: "🧾" },
               { id: "meals", label: "Meals", icon: "🍽️" },
@@ -1127,6 +1365,14 @@
               suggestions: [],
               suggestionStatus: "Loading suggestions…",
               suggestionStatusColor: "text-slate-300",
+            },
+            shopping: {
+              items: [],
+              form: { name: "", quantity: "", unit: "ea", notes: "" },
+              status: "Loading shopping list…",
+              statusColor: "text-slate-300",
+              loading: false,
+              pending: {},
             },
             meals: {
               items: [],
@@ -1177,6 +1423,12 @@
               return "Base servings";
             }
             return `${value} serving${value === 1 ? "" : "s"}`;
+          },
+          shoppingActiveItems() {
+            return this.shopping.items.filter((item) => !item.is_checked);
+          },
+          shoppingCompletedItems() {
+            return this.shopping.items.filter((item) => item.is_checked);
           },
         },
         methods: {
@@ -1337,6 +1589,19 @@
               delta.ingredient_id != null ? `inventory item #${delta.ingredient_id}` : "inventory";
             return `${amount} from ${label}`;
           },
+          formatShoppingQuantity(item) {
+            if (item.quantity == null && !item.unit) {
+              return null;
+            }
+            const value = item.quantity != null ? this.formatNumber(item.quantity) : null;
+            if (!value && !item.unit) {
+              return null;
+            }
+            if (!value) {
+              return item.unit;
+            }
+            return item.unit ? `${value} ${item.unit}` : value;
+          },
           formatShortfall(short) {
             const amount =
               this.formatAmount(short.need_g, "g") ||
@@ -1363,10 +1628,23 @@
             parts.push(`Scaled to ${this.targetServingsLabel(candidate).toLowerCase()}`);
             return parts.join(" • ");
           },
+          isShoppingItemBusy(itemId) {
+            return Boolean(this.shopping.pending[itemId]);
+          },
+          setShoppingPending(itemId, busy) {
+            const next = { ...this.shopping.pending };
+            if (busy) {
+              next[itemId] = true;
+            } else {
+              delete next[itemId];
+            }
+            this.shopping.pending = next;
+          },
           async refreshAll() {
             await Promise.all([
               this.loadPreferences(),
               this.loadInventory(),
+              this.loadShoppingList(),
               this.loadReceipts(),
               this.loadMeals(),
               this.loadSuggestions(),
@@ -1509,6 +1787,215 @@
               this.preferences.statusColor = "text-red-300";
             } finally {
               this.preferences.loading = false;
+            }
+          },
+          async loadShoppingList() {
+            this.shopping.loading = true;
+            this.shopping.status = "Loading shopping list…";
+            this.shopping.statusColor = "text-slate-300";
+            try {
+              const response = await fetch("/shopping-list");
+              if (!response.ok) {
+                throw new Error(`Failed to load shopping list (${response.status})`);
+              }
+              const data = await response.json();
+              this.shopping.items = Array.isArray(data) ? data : [];
+              const count = this.shopping.items.length;
+              this.shopping.status =
+                count === 0 ? "No shopping items yet. Add what you need for tonight." : `Tracking ${count} shopping item(s).`;
+              this.shopping.statusColor = "text-slate-300";
+            } catch (error) {
+              this.shopping.status = `Error loading shopping list: ${error.message}`;
+              this.shopping.statusColor = "text-red-300";
+            } finally {
+              this.shopping.loading = false;
+              this.shopping.pending = {};
+            }
+          },
+          async createShoppingItem() {
+            const form = this.shopping.form;
+            const name = (form.name || "").trim();
+            if (!name) {
+              this.shopping.status = "Item name is required.";
+              this.shopping.statusColor = "text-red-300";
+              return;
+            }
+            let quantity = null;
+            if (form.quantity !== "" && form.quantity !== null && form.quantity !== undefined) {
+              const parsed = Number(form.quantity);
+              if (!Number.isFinite(parsed) || parsed <= 0) {
+                this.shopping.status = "Quantity must be a positive number.";
+                this.shopping.statusColor = "text-red-300";
+                return;
+              }
+              quantity = parsed;
+            }
+            const payload = { name };
+            if (quantity !== null) {
+              payload.quantity = quantity;
+            }
+            const unit = (form.unit || "").trim();
+            if (unit) {
+              payload.unit = unit;
+            }
+            const notes = (form.notes || "").trim();
+            if (notes) {
+              payload.notes = notes;
+            }
+            this.shopping.loading = true;
+            try {
+              const response = await fetch("/shopping-list", {
+                method: "POST",
+                headers: this.authHeaders({ "Content-Type": "application/json" }),
+                body: JSON.stringify(payload),
+              });
+              if (!response.ok) {
+                const detail = await response.json().catch(() => ({}));
+                throw new Error(detail?.detail || `Status ${response.status}`);
+              }
+              this.shopping.status = "Shopping item added.";
+              this.shopping.statusColor = "text-green-300";
+              this.shopping.form = { name: "", quantity: "", unit: unit || "ea", notes: "" };
+              await this.loadShoppingList();
+            } catch (error) {
+              this.shopping.status = `Error saving item: ${error.message}`;
+              this.shopping.statusColor = "text-red-300";
+            } finally {
+              this.shopping.loading = false;
+            }
+          },
+          async toggleShoppingItem(item) {
+            this.setShoppingPending(item.id, true);
+            try {
+              const response = await fetch(`/shopping-list/${item.id}`, {
+                method: "PUT",
+                headers: this.authHeaders({ "Content-Type": "application/json" }),
+                body: JSON.stringify({ is_checked: !item.is_checked }),
+              });
+              if (!response.ok) {
+                const detail = await response.json().catch(() => ({}));
+                throw new Error(detail?.detail || `Status ${response.status}`);
+              }
+              await this.loadShoppingList();
+            } catch (error) {
+              this.shopping.status = `Error updating ${item.name}: ${error.message}`;
+              this.shopping.statusColor = "text-red-300";
+            } finally {
+              this.setShoppingPending(item.id, false);
+            }
+          },
+          async deleteShoppingItem(item) {
+            if (!window.confirm(`Remove ${item.name} from the list?`)) {
+              return;
+            }
+            this.setShoppingPending(item.id, true);
+            try {
+              const response = await fetch(`/shopping-list/${item.id}`, {
+                method: "DELETE",
+                headers: this.authHeaders(),
+              });
+              if (!response.ok) {
+                const detail = await response.json().catch(() => ({}));
+                throw new Error(detail?.detail || `Status ${response.status}`);
+              }
+              this.shopping.status = `${item.name} removed from the list.`;
+              this.shopping.statusColor = "text-green-300";
+              await this.loadShoppingList();
+            } catch (error) {
+              this.shopping.status = `Error deleting ${item.name}: ${error.message}`;
+              this.shopping.statusColor = "text-red-300";
+            } finally {
+              this.setShoppingPending(item.id, false);
+            }
+          },
+          async resetShoppingList() {
+            if (!this.shopping.items.length) {
+              this.shopping.status = "Shopping list is already empty.";
+              this.shopping.statusColor = "text-slate-300";
+              return;
+            }
+            if (!window.confirm("Reset the entire shopping list?")) {
+              return;
+            }
+            this.shopping.loading = true;
+            try {
+              const response = await fetch("/shopping-list/reset", {
+                method: "POST",
+                headers: this.authHeaders(),
+              });
+              if (!response.ok) {
+                const detail = await response.json().catch(() => ({}));
+                throw new Error(detail?.detail || `Status ${response.status}`);
+              }
+              this.shopping.status = "Shopping list cleared.";
+              this.shopping.statusColor = "text-green-300";
+              await this.loadShoppingList();
+            } catch (error) {
+              this.shopping.status = `Error resetting list: ${error.message}`;
+              this.shopping.statusColor = "text-red-300";
+            } finally {
+              this.shopping.loading = false;
+            }
+          },
+          async addShoppingItemToInventory(item) {
+            let quantity = item.quantity;
+            if (quantity == null) {
+              const promptValue = window.prompt(
+                `How many ${item.name} did you pick up?`,
+                "1"
+              );
+              if (promptValue === null) {
+                this.shopping.status = "Add to inventory canceled.";
+                this.shopping.statusColor = "text-slate-300";
+                return;
+              }
+              const parsed = Number(promptValue);
+              if (!Number.isFinite(parsed) || parsed <= 0) {
+                this.shopping.status = "Quantity must be greater than zero.";
+                this.shopping.statusColor = "text-red-300";
+                return;
+              }
+              quantity = parsed;
+            }
+            let unit = item.unit;
+            if (!unit) {
+              const unitValue = window.prompt("Unit (e.g., g, ml, ea)", "ea");
+              if (unitValue === null) {
+                this.shopping.status = "Add to inventory canceled.";
+                this.shopping.statusColor = "text-slate-300";
+                return;
+              }
+              unit = unitValue.trim() || "ea";
+            }
+            const payload = {
+              name: item.name,
+              quantity,
+              unit,
+            };
+            if (item.notes) {
+              payload.notes = item.notes;
+            }
+            this.setShoppingPending(item.id, true);
+            this.shopping.status = `Adding ${item.name} to inventory…`;
+            this.shopping.statusColor = "text-primary-300";
+            try {
+              const response = await fetch(`/shopping-list/${item.id}/add-to-inventory`, {
+                method: "POST",
+                headers: this.authHeaders({ "Content-Type": "application/json" }),
+                body: JSON.stringify(payload),
+              });
+              if (!response.ok) {
+                const detail = await response.json().catch(() => ({}));
+                throw new Error(detail?.detail || `Status ${response.status}`);
+              }
+              await Promise.all([this.loadShoppingList(), this.loadInventory()]);
+              this.shopping.status = `${item.name} added to inventory.`;
+              this.shopping.statusColor = "text-green-300";
+            } catch (error) {
+              this.shopping.status = `Error adding to inventory: ${error.message}`;
+              this.shopping.statusColor = "text-red-300";
+            } finally {
+              this.setShoppingPending(item.id, false);
             }
           },
           async loadInventory() {

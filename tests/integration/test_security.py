@@ -42,6 +42,22 @@ def test_requests_require_api_token(secure_client):
     assert response.status_code == status.HTTP_201_CREATED
 
 
+def test_shopping_list_requires_api_token(secure_client):
+    response = secure_client.post(
+        "/shopping-list",
+        json={"name": "eggs", "quantity": 12, "unit": "count"},
+    )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    headers = {"Authorization": "Bearer secret-token"}
+    response = secure_client.post(
+        "/shopping-list",
+        json={"name": "eggs", "quantity": 12, "unit": "count"},
+        headers=headers,
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+
+
 def test_plan_endpoint_enforces_api_token(secure_client):
     payload = {
         "date": "2025-01-01",

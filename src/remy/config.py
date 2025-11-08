@@ -88,6 +88,50 @@ class Settings(BaseModel):
         default=5,
         description="Number of recipe search snippets to include in the planner prompt.",
     )
+    receipt_llm_enabled: bool = Field(
+        default=False,
+        description="Enable LLM-assisted receipt parsing when true.",
+    )
+    receipt_llm_base_url: Optional[str] = Field(
+        default=None,
+        description="Receipt parsing LLM base URL (falls back to planner URL when unset).",
+    )
+    receipt_llm_model: str = Field(
+        default="Qwen/Qwen1.5-0.5B-Chat",
+        description="Model identifier for receipt parsing LLM calls.",
+    )
+    receipt_llm_temperature: float = Field(
+        default=0.0,
+        description="Sampling temperature for receipt parsing LLM.",
+    )
+    receipt_llm_max_tokens: int = Field(
+        default=400,
+        description="Max tokens for receipt parsing LLM responses.",
+    )
+    receipt_llm_provider: str = Field(
+        default="openai",
+        description="Receipt parsing LLM provider (openai or ollama).",
+    )
+    rag_enabled: bool = Field(
+        default=False,
+        description="Enable im2recipe RAG enrichment when true.",
+    )
+    rag_model_path: Path = Field(
+        default=Path("./data/models/im2recipe_model.t7"),
+        description="Location where the im2recipe Torch7 model will be stored.",
+    )
+    rag_corpus_path: Path = Field(
+        default=Path("./data/rag/recipes_seed.json"),
+        description="JSON corpus used for retrieval-augmented prompt snippets.",
+    )
+    rag_top_k: int = Field(
+        default=3,
+        description="Number of RAG hits to surface in planner prompts.",
+    )
+    rag_embedding_dim: int = Field(
+        default=384,
+        description="Feature hashing dimension for the RAG vectorizer.",
+    )
 
     model_config = ConfigDict(frozen=True)
 
@@ -179,6 +223,40 @@ def _load_from_env() -> dict[str, object]:
     if (recipe_search_results := _env("REMY_RECIPE_SEARCH_RESULTS")):
         try:
             payload["planner_recipe_search_results"] = int(recipe_search_results)
+        except ValueError:
+            pass
+    if (receipt_llm_enabled := _env("REMY_RECEIPT_LLM_ENABLED")):
+        payload["receipt_llm_enabled"] = _coerce_bool(receipt_llm_enabled)
+    if (receipt_llm_base := _env("REMY_RECEIPT_LLM_BASE_URL")):
+        payload["receipt_llm_base_url"] = receipt_llm_base
+    if (receipt_llm_model := _env("REMY_RECEIPT_LLM_MODEL")):
+        payload["receipt_llm_model"] = receipt_llm_model
+    if (receipt_llm_temperature := _env("REMY_RECEIPT_LLM_TEMPERATURE")):
+        try:
+            payload["receipt_llm_temperature"] = float(receipt_llm_temperature)
+        except ValueError:
+            pass
+    if (receipt_llm_max_tokens := _env("REMY_RECEIPT_LLM_MAX_TOKENS")):
+        try:
+            payload["receipt_llm_max_tokens"] = int(receipt_llm_max_tokens)
+        except ValueError:
+            pass
+    if (receipt_llm_provider := _env("REMY_RECEIPT_LLM_PROVIDER")):
+        payload["receipt_llm_provider"] = receipt_llm_provider
+    if (rag_enabled := _env("REMY_RAG_ENABLED")):
+        payload["rag_enabled"] = _coerce_bool(rag_enabled)
+    if (rag_model_path := _env("REMY_RAG_MODEL_PATH")):
+        payload["rag_model_path"] = Path(rag_model_path)
+    if (rag_corpus_path := _env("REMY_RAG_CORPUS_PATH")):
+        payload["rag_corpus_path"] = Path(rag_corpus_path)
+    if (rag_top_k := _env("REMY_RAG_TOP_K")):
+        try:
+            payload["rag_top_k"] = int(rag_top_k)
+        except ValueError:
+            pass
+    if (rag_dim := _env("REMY_RAG_EMBEDDING_DIM")):
+        try:
+            payload["rag_embedding_dim"] = int(rag_dim)
         except ValueError:
             pass
     return payload

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Generator
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from remy.config import get_settings
@@ -15,6 +17,7 @@ from remy.db.models import Base
 
 _engine: Engine | None = None
 _session_factory: sessionmaker[Session] | None = None
+logger = logging.getLogger(__name__)
 
 
 def get_engine(database_path: Path | None = None) -> Engine:
@@ -33,7 +36,13 @@ def get_engine(database_path: Path | None = None) -> Engine:
         future=True,
         echo=False,
     )
-    Base.metadata.create_all(_engine)
+    try:
+        Base.metadata.create_all(_engine)
+    except OperationalError as exc:
+        if "already exists" in str(exc).lower():
+            logger.debug("Database schema already initialized: %s", exc)
+        else:
+            raise
     _session_factory = sessionmaker(bind=_engine, autoflush=False, autocommit=False, future=True)
     return _engine
 

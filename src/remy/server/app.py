@@ -41,6 +41,7 @@ from remy.models.receipt import (
     ReceiptLineItem,
     ReceiptOcrResult,
 )
+from remy.models.shopping import ShoppingListItem
 from remy.ocr import ReceiptOcrService
 from remy.ocr.worker import ReceiptOcrWorker
 from remy.planner.context_builder import assemble_planning_context
@@ -315,6 +316,127 @@ def create_app() -> FastAPI:
             deleter(item_id)
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    @application.get(
+        "/shopping-list",
+        response_model=list[ShoppingListItem],
+        summary="List shopping list items",
+    )
+    def shopping_list_list(
+        provider: deps.ShoppingListProvider = Depends(deps.get_shopping_list_provider),
+    ) -> list[ShoppingListItem]:
+        return provider()
+
+    @application.post(
+        "/shopping-list",
+        response_model=ShoppingListItem,
+        status_code=status.HTTP_201_CREATED,
+        summary="Create shopping list item",
+    )
+    def shopping_list_create(
+        payload: ShoppingListCreateRequest,
+        auth: None = Depends(deps.require_api_token),
+        creator: deps.ShoppingListCreator = Depends(deps.get_shopping_list_creator),
+    ) -> ShoppingListItem:
+        return creator(payload.model_dump())
+
+    @application.put(
+        "/shopping-list/{item_id}",
+        response_model=ShoppingListItem,
+        summary="Update shopping list item",
+    )
+    def shopping_list_update(
+        item_id: int,
+        payload: ShoppingListUpdateRequest,
+        auth: None = Depends(deps.require_api_token),
+        updater: deps.ShoppingListUpdater = Depends(deps.get_shopping_list_updater),
+    ) -> ShoppingListItem:
+        update_payload = payload.model_dump(exclude_unset=True)
+        if not update_payload:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No fields provided for update",
+            )
+        try:
+            return updater(item_id, update_payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    @application.delete(
+        "/shopping-list/{item_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        summary="Delete shopping list item",
+    )
+    def shopping_list_delete(
+        item_id: int,
+        auth: None = Depends(deps.require_api_token),
+        deleter: deps.ShoppingListDeleter = Depends(deps.get_shopping_list_deleter),
+    ) -> None:
+        try:
+            deleter(item_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    @application.post(
+        "/shopping-list/reset",
+        status_code=status.HTTP_204_NO_CONTENT,
+        summary="Reset shopping list",
+    )
+    def shopping_list_reset(
+        auth: None = Depends(deps.require_api_token),
+        resetter: deps.ShoppingListResetter = Depends(deps.get_shopping_list_resetter),
+    ) -> None:
+        resetter()
+
+    @application.post(
+        "/shopping-list/{item_id}/add-to-inventory",
+        response_model=InventoryItem,
+        status_code=status.HTTP_201_CREATED,
+        summary="Convert shopping item into inventory",
+    )
+    def shopping_list_add_to_inventory(
+        item_id: int,
+        payload: ShoppingListAddToInventoryRequest | None = Body(default=None),
+        auth: None = Depends(deps.require_api_token),
+        fetcher: deps.ShoppingListFetcher = Depends(deps.get_shopping_list_fetcher),
+        deleter: deps.ShoppingListDeleter = Depends(deps.get_shopping_list_deleter),
+        inventory_creator: deps.InventoryCreator = Depends(deps.get_inventory_creator),
+    ) -> InventoryItem:
+        item = fetcher(item_id)
+        if item is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
+
+        overrides = payload.model_dump(exclude_unset=True) if payload else {}
+        name = overrides.get("name") or item.name
+        quantity = overrides.get("quantity") or item.quantity
+        if quantity is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Quantity is required to add an item to inventory",
+            )
+        unit = overrides.get("unit") or item.unit or "ea"
+        best_before = overrides.get("best_before")
+        notes = overrides.get("notes") or item.notes
+
+        create_payload: dict[str, Any] = {
+            "name": name,
+            "quantity": quantity,
+            "unit": unit,
+        }
+        if best_before is not None:
+            create_payload["best_before"] = best_before
+        if notes:
+            create_payload["notes"] = notes
+
+        inventory_item = inventory_creator(create_payload)
+        try:
+            deleter(item_id)
+        except ValueError:
+            logger.warning(
+                "Shopping list item %s vanished before deletion during add-to-inventory",
+                item_id,
+            )
+        return inventory_item
 
     @application.get(
         "/preferences",
@@ -678,6 +800,29 @@ class InventoryCreateRequest(BaseModel):
 
 
 class InventoryUpdateRequest(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    quantity: Optional[float] = Field(default=None, gt=0)
+    unit: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    best_before: Optional[date] = Field(default=None)
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
+class ShoppingListCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    quantity: Optional[float] = Field(default=None, gt=0)
+    unit: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
+class ShoppingListUpdateRequest(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    quantity: Optional[float] = Field(default=None, gt=0)
+    unit: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    notes: Optional[str] = Field(default=None, max_length=500)
+    is_checked: Optional[bool] = Field(default=None)
+
+
+class ShoppingListAddToInventoryRequest(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=255)
     quantity: Optional[float] = Field(default=None, gt=0)
     unit: Optional[str] = Field(default=None, min_length=1, max_length=64)

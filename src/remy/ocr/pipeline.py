@@ -22,6 +22,7 @@ from remy import metrics
 from remy.db.receipts import fetch_receipt_blob, get_receipt_ocr, update_receipt_ocr
 from remy.ingest import ingest_receipt_items
 from remy.models.receipt import Receipt, ReceiptOcrResult
+from remy.ocr.llm_client import build_receipt_llm_client
 from remy.ocr.parser import ReceiptParser
 from remy.ocr.sanitize import sanitize_text
 
@@ -70,7 +71,11 @@ class ReceiptOcrService:
             except Exception:  # pragma: no cover - fallback if settings unavailable
                 lang = "eng"
         self._lang = lang
-        self._parser = parser or ReceiptParser()
+        if parser is not None:
+            self._parser = parser
+        else:
+            llm_client = build_receipt_llm_client()
+            self._parser = ReceiptParser(llm_client=llm_client)
 
     def get_status(self, receipt_id: int) -> Optional[ReceiptOcrResult]:
         """Return the current OCR status for a receipt, if recorded."""

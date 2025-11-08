@@ -21,6 +21,7 @@ from remy.models.plan import (
     PlanCandidate,
     ShoppingShortfall,
 )
+from remy.rag.im2recipe import get_cached_rag
 from remy.search import search_recipes
 
 from .constraint_engine import (
@@ -39,8 +40,11 @@ from .utils import build_inventory_index, normalize_name, resolve_inventory_item
 logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
-    "You are a household dinner planner. Optimize for (1) using inventory before expiry, "
-    "(2) low weekday prep time, (3) variety, and (4) household preferences. "
+    "You are a household dinner planner focused on composing cohesive, restaurant-quality dinners. "
+    "Optimize for (1) well-rounded mains plus complementary sides, (2) culinary variety and seasonal balance, "
+    "(3) low weekday prep time, and (4) household preferences. "
+    "Use pantry inventory when it makes sense, but do not hesitate to introduce extra ingredients—"
+    "mark them as shopping_shortfall entries instead of avoiding good ideas. "
     "Return ONLY valid JSON matching this schema and ALWAYS provide 2-3 candidates:\n"
     '{\n'
     '  "date": "YYYY-MM-DD",\n'
@@ -64,8 +68,10 @@ SYSTEM_PROMPT = (
     '  ]\n'
     '}\n'
     "Rules: candidates array MUST contain 2 or 3 entries, steps must be an array (no combined paragraphs), "
-    "include inventory_deltas for every ingredient that exists in inventory, and only include shopping_shortfall rows "
-    "when an ingredient is missing or insufficient. Do not emit prose, Markdown, or keys outside this schema. "
+    "include inventory_deltas for every ingredient that exists in inventory, and list shopping_shortfall rows for "
+    "any ingredient that is missing OR insufficient so new groceries can be purchased. "
+    "Draw inspiration from any recipe snippets provided and make each candidate feel complete (protein + sides or garnishes). "
+    "Do not emit prose, Markdown, or keys outside this schema. "
     "Example output:\n"
     '{\n'
     '  "date": "2025-01-01",\n'
@@ -111,10 +117,13 @@ USER_PROMPT_TEMPLATE = (
     "- Max prep time: {max_time} minutes\n"
     "- Attendees: {attendees}\n"
     "You MUST honor the diet/allergen constraints and keep prep time within the limit.\n"
+    "- Favor balanced, composed dinners (entrées with sides or toppings).\n"
+    "- If pantry items are insufficient, still pitch the dish and capture the gap in shopping_shortfall.\n"
+    "- When recipe inspiration snippets are present, weave those ideas or techniques into at least one candidate.\n"
     "Here is the planning context for {date}:\n{context_json}\n"
     "Return 2-3 dinner candidates that obey the schema. "
-    "Respect diet/allergen constraints strictly, prioritize ingredients nearing expiry, "
-    "and only list shopping_shortfall items for ingredients that cannot be fulfilled from inventory. "
+    "Respect diet/allergen constraints strictly, use near-expiry ingredients when practical, "
+    "and make confident suggestions even if some items require shopping. "
     "If the context is incomplete, reply with {{\"date\": \"{date}\", \"candidates\": []}}."
     "{recipe_snippets}"
 )
@@ -123,7 +132,7 @@ LLM_REQUEST_TIMEOUT = 30.0
 _JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
 
 
-def _extract_search_terms(context: PlanningContext, limit: int = 3) -> list[str]:
+def _extract_search_terms(context: PlanningContext, limit: int = 5) -> list[str]:
     terms: list[str] = []
     inventory = sorted(
         context.inventory,
@@ -147,13 +156,28 @@ def _extract_search_terms(context: PlanningContext, limit: int = 3) -> list[str]
 
 
 def _collect_recipe_snippets(context: PlanningContext) -> str:
+    sections: list[str] = []
+    web_snippets = _collect_web_recipe_snippets(context)
+    if web_snippets:
+        sections.append(
+            "Web inspiration:\n" + "\n".join(web_snippets)
+        )
+    rag_snippets = _collect_rag_snippet_lines(context)
+    if rag_snippets:
+        sections.append(
+            "Im2Recipe retrievals:\n" + "\n".join(rag_snippets)
+        )
+    return "\n\n".join(sections)
+
+
+def _collect_web_recipe_snippets(context: PlanningContext) -> list[str]:
     settings = get_settings()
     if not settings.planner_enable_recipe_search:
-        return ""
+        return []
 
-    terms = _extract_search_terms(context)
+    terms = _extract_search_terms(context, limit=5)
     if not terms:
-        return ""
+        return []
 
     query_parts = terms + [context.prefs.diet or "dinner", "recipe"]
     query = " ".join(query_parts)
@@ -161,13 +185,30 @@ def _collect_recipe_snippets(context: PlanningContext) -> str:
         results = search_recipes(query, limit=settings.planner_recipe_search_results)
     except Exception as exc:  # pragma: no cover - best effort network call
         logger.warning("Recipe search failed: %s", exc)
-        return ""
+        return []
 
     lines = []
     for idx, result in enumerate(results, start=1):
         snippet = shorten(result.snippet or "", width=220, placeholder="…")
         lines.append(f"{idx}. {result.title} — {snippet} (source: {result.link})")
-    return "\n".join(lines)
+    return lines
+
+
+def _collect_rag_snippet_lines(context: PlanningContext) -> list[str]:
+    rag = get_cached_rag()
+    if rag is None:
+        return []
+    settings = get_settings()
+    top_k = max(1, settings.rag_top_k)
+    try:
+        documents = rag.retrieve(context, top_k=top_k)
+    except Exception as exc:  # pragma: no cover - retrieval best effort
+        logger.warning("Im2Recipe RAG retrieval failed: %s", exc)
+        return []
+    snippets = []
+    for idx, doc in enumerate(documents, start=1):
+        snippets.append(f"{idx}. {rag.format_document(doc)}")
+    return snippets
 
 
 def _render_user_prompt(

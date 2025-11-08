@@ -25,9 +25,18 @@ from remy.db.receipts import (
     list_receipts,
     store_receipt,
 )
+from remy.db.shopping_list import (
+    create_shopping_item,
+    delete_shopping_item,
+    get_shopping_item,
+    list_shopping_items,
+    reset_shopping_list,
+    update_shopping_item,
+)
 from remy.models.context import InventoryItem, PlanningContext, Preferences, RecentMeal
 from remy.models.plan import Plan
 from remy.models.receipt import InventorySuggestion, Receipt, ReceiptLineItem, ReceiptOcrResult
+from remy.models.shopping import ShoppingListItem
 from remy.ocr import ReceiptOcrService
 from remy.planner.app.planner import generate_plan
 
@@ -54,6 +63,12 @@ InventorySuggestionDeleter = Callable[[int], None]
 MealsProvider = Callable[[], List[RecentMeal]]
 MealRecorder = Callable[[RecentMeal], RecentMeal]
 MealDeleter = Callable[[date, str], None]
+ShoppingListProvider = Callable[[], List[ShoppingListItem]]
+ShoppingListCreator = Callable[[dict], ShoppingListItem]
+ShoppingListUpdater = Callable[[int, dict], ShoppingListItem]
+ShoppingListDeleter = Callable[[int], None]
+ShoppingListResetter = Callable[[], None]
+ShoppingListFetcher = Callable[[int], Optional[ShoppingListItem]]
 
 
 def get_plan_generator() -> PlanGenerator:
@@ -150,6 +165,30 @@ def get_meal_recorder() -> MealRecorder:
 
 def get_meal_deleter() -> MealDeleter:
     return lambda meal_date, title: delete_meal(meal_date, title)
+
+
+def get_shopping_list_provider() -> ShoppingListProvider:
+    return list_shopping_items
+
+
+def get_shopping_list_creator() -> ShoppingListCreator:
+    return lambda payload: create_shopping_item(**payload)
+
+
+def get_shopping_list_updater() -> ShoppingListUpdater:
+    return lambda item_id, payload: update_shopping_item(item_id, **payload)
+
+
+def get_shopping_list_deleter() -> ShoppingListDeleter:
+    return lambda item_id: delete_shopping_item(item_id)
+
+
+def get_shopping_list_resetter() -> ShoppingListResetter:
+    return reset_shopping_list
+
+
+def get_shopping_list_fetcher() -> ShoppingListFetcher:
+    return get_shopping_item
 
 
 def require_api_token(
