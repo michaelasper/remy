@@ -20,7 +20,11 @@ env/
 
 # IDEs and editors
 .idea/
-.vscode/
+.vscode/*
+!.vscode/mcp.remote.json
+!.vscode/mcp.local.json
+!.vscode/mcp.remote.json
+!.vscode/mcp.local.json
 *.swp
 *.swo
 # Runtime data
