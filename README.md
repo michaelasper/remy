@@ -41,6 +41,7 @@ Remy is a FastAPI + Vue sous-chefâ€”named after the tiny rat from *Ratatouille*â
 - [Overview & roadmap](docs/overview.md)
 - [Setup & configuration details](docs/setup.md)
 - [Testing strategy](docs/testing.md)
+- [Release process & CLI image](docs/releases.md)
 - More docs live inside `docs/`.
 
 ## License

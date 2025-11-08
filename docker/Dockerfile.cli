@@ -1,0 +1,31 @@
+FROM python:3.11-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+# Install lightweight tools needed by CLI flows (OCR helpers stay in main server image)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy dependency metadata first for caching
+COPY pyproject.toml README.md LICENSE /app/
+
+RUN pip install --upgrade pip setuptools wheel
+
+# Install the Remy CLI
+COPY src /app/src
+RUN pip install .
+
+# Provide a non-root user for better defaults
+RUN useradd --create-home --shell /bin/bash remy && \
+    chown -R remy:remy /app
+
+USER remy
+
+ENTRYPOINT ["remy"]
+CMD ["--help"]
