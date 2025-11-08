@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import status
 
 from remy.db.receipts import update_receipt_ocr
@@ -125,3 +127,48 @@ def test_receipt_ingest_endpoint(client):
 
     suggestions_after = client.get("/inventory/suggestions").json()
     assert all(s["id"] != suggestion_id for s in suggestions_after)
+
+
+def test_receipt_ingest_updates_existing_inventory(client):
+    inventory_items = client.get("/inventory").json()
+    assert inventory_items, "Inventory should be seeded"
+    target_item = inventory_items[0]
+    base_quantity = float(target_item["qty"])
+
+    receipt_path = Path("tests/fixtures/receipts/receipt.png")
+    with receipt_path.open("rb") as receipt_file:
+        files = {"file": (receipt_path.name, receipt_file.read(), "image/png")}
+        upload_response = client.post("/receipts", files=files, headers=auth_headers())
+    receipt_id = upload_response.json()["id"]
+
+    update_receipt_ocr(
+        receipt_id,
+        status="succeeded",
+        text="Parsed",
+        confidence=0.95,
+        metadata={"parsed": {"items": []}},
+    )
+
+    ingest_quantity = 2.0
+    ingest_response = client.post(
+        f"/receipts/{receipt_id}/ingest",
+        json={
+            "items": [
+                {
+                    "name": target_item["name"],
+                    "quantity": ingest_quantity,
+                    "unit": target_item["unit"],
+                    "inventory_match_id": target_item["id"],
+                }
+            ]
+        },
+        headers=auth_headers(),
+    )
+    assert ingest_response.status_code == status.HTTP_200_OK
+    payload = ingest_response.json()
+    assert payload["ingested"]
+    assert not payload["skipped"]
+
+    refreshed_items = client.get("/inventory").json()
+    refreshed = next(item for item in refreshed_items if item["id"] == target_item["id"])
+    assert refreshed["qty"] == base_quantity + ingest_quantity

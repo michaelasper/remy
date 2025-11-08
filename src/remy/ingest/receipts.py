@@ -70,9 +70,13 @@ def ingest_receipt_items(
                 else:
                     skipped.append({"name": name, "reason": "missing_quantity"})
                     continue
+            existing_quantity = getattr(matched_item, "quantity", None)
+            if existing_quantity is None:
+                existing_quantity = getattr(matched_item, "qty", 0.0)
+
             updated = update_inventory_item(
                 matched_item.id,
-                {"quantity": float(matched_item.qty or 0.0) + float(quantity)},
+                quantity=float(existing_quantity or 0.0) + float(quantity),
             )
             ingested.append({"id": updated.id, "action": "updated", "name": updated.name})
             metadata_ingested.append({"name": updated.name, "quantity": quantity})
