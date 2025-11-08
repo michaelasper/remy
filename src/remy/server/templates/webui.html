@@ -383,9 +383,23 @@
                           v-if="candidate.shopping_shortfall && candidate.shopping_shortfall.length"
                           class="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100"
                         >
-                          <p class="font-semibold uppercase tracking-wide text-xs text-amber-200">
-                            Shopping List
-                          </p>
+                          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <p class="font-semibold uppercase tracking-wide text-xs text-amber-200">
+                              Shopping Shortfalls
+                            </p>
+                            <button
+                              v-if="remainingShoppingShortfalls(candidate).length"
+                              type="button"
+                              class="inline-flex items-center gap-2 rounded-full border border-amber-400/60 bg-amber-500/20 px-3 py-1 text-xs font-semibold text-amber-100 transition hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+                              :disabled="isShoppingBulkAdding(candidate)"
+                              @click="addAllShortfallsToShoppingList(candidate)"
+                            >
+                              <span class="text-base">🛒</span>
+                              <span>
+                                {{ isShoppingBulkAdding(candidate) ? "Adding all…" : `Add all (${remainingShoppingShortfalls(candidate).length})` }}
+                              </span>
+                            </button>
+                          </div>
                           <ul class="mt-2 space-y-1">
                             <li
                               v-for="short in candidate.shopping_shortfall"
@@ -396,10 +410,18 @@
                               <button
                                 type="button"
                                 @click="addShortfallToShoppingList(candidate, short)"
-                                :disabled="isShoppingItemAdding(candidate, short)"
+                                :disabled="isShoppingItemAdding(candidate, short) || isShoppingItemAdded(candidate, short) || isShoppingBulkAdding(candidate)"
                                 class="inline-flex items-center gap-1 rounded-full border border-amber-400/60 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-100 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                               >
-                                <span>{{ isShoppingItemAdding(candidate, short) ? "Adding…" : "Add to Shopping List" }}</span>
+                                <span>
+                                  {{
+                                    isShoppingItemAdded(candidate, short)
+                                      ? "Added"
+                                      : isShoppingItemAdding(candidate, short)
+                                      ? "Adding…"
+                                      : "Add to Shopping List"
+                                  }}
+                                </span>
                               </button>
                             </li>
                           </ul>
@@ -1470,7 +1492,9 @@
               servingTarget: 2,
               showRaw: false,
               mealSaveState: {},
-              shoppingAddState: {},
+            shoppingAddState: {},
+            shoppingAddedShortfalls: {},
+            shoppingBulkState: {},
               form: {
                 date: new Date().toISOString().slice(0, 10),
                 attendees: 2,
@@ -1888,15 +1912,46 @@
             const mealKey = this.candidateMealKey(candidate);
             return `${mealKey}::${short.name}::${short.reason || "unknown"}`;
           },
+          isShoppingItemAdded(candidate, short) {
+            return Boolean(
+              this.planner.shoppingAddedShortfalls[this.shoppingShortfallKey(candidate, short)]
+            );
+          },
           isShoppingItemAdding(candidate, short) {
             return (
               this.planner.shoppingAddState[this.shoppingShortfallKey(candidate, short)] === "saving"
             );
           },
+          markShortfallAdded(candidate, short) {
+            const key = this.shoppingShortfallKey(candidate, short);
+            this.planner.shoppingAddedShortfalls = {
+              ...this.planner.shoppingAddedShortfalls,
+              [key]: true,
+            };
+          },
+          remainingShoppingShortfalls(candidate) {
+            const items = Array.isArray(candidate.shopping_shortfall)
+              ? candidate.shopping_shortfall
+              : [];
+            return items.filter((short) => !this.isShoppingItemAdded(candidate, short));
+          },
           setShoppingAddState(candidate, short, state) {
             const key = this.shoppingShortfallKey(candidate, short);
             this.planner.shoppingAddState = {
               ...this.planner.shoppingAddState,
+              [key]: state,
+            };
+          },
+          shoppingBulkKey(candidate) {
+            return this.candidateMealKey(candidate);
+          },
+          isShoppingBulkAdding(candidate) {
+            return this.planner.shoppingBulkState[this.shoppingBulkKey(candidate)] === "saving";
+          },
+          setShoppingBulkState(candidate, state) {
+            const key = this.shoppingBulkKey(candidate);
+            this.planner.shoppingBulkState = {
+              ...this.planner.shoppingBulkState,
               [key]: state,
             };
           },
@@ -1924,6 +1979,7 @@
                 const detail = await response.json().catch(() => ({}));
                 throw new Error(this.formatApiError(detail, response.status));
               }
+              this.markShortfallAdded(candidate, short);
               if (!silent) {
                 await this.loadShoppingList();
                 this.planner.status = `${name} added to the shopping list.`;
@@ -1942,6 +1998,41 @@
               if (!silent) {
                 this.setShoppingAddState(candidate, short, "idle");
               }
+            }
+          },
+          async addAllShortfallsToShoppingList(candidate) {
+            const pending = this.remainingShoppingShortfalls(candidate);
+            if (!pending.length) {
+              this.planner.status = "All shortfalls are already on the shopping list.";
+              this.planner.statusColor = "text-slate-300";
+              return;
+            }
+            this.setShoppingBulkState(candidate, "saving");
+            this.planner.status = `Adding ${pending.length} shopping item(s)…`;
+            this.planner.statusColor = "text-primary-300";
+            let added = 0;
+            try {
+              for (const short of pending) {
+                const success = await this.addShortfallToShoppingList(candidate, short, {
+                  silent: true,
+                });
+                if (success) {
+                  added += 1;
+                }
+              }
+              if (added) {
+                await this.loadShoppingList();
+              }
+              this.planner.status =
+                added === 0
+                  ? "No new items were added."
+                  : `${added} shopping item${added === 1 ? "" : "s"} added.`;
+              this.planner.statusColor = added ? "text-green-300" : "text-slate-300";
+            } catch (error) {
+              this.planner.status = `Bulk add failed: ${error.message}`;
+              this.planner.statusColor = "text-red-300";
+            } finally {
+              this.setShoppingBulkState(candidate, "idle");
             }
           },
           isShoppingItemBusy(itemId) {
@@ -2056,12 +2147,18 @@
                 throw new Error(`Planner request failed (${response.status}): ${detail}`);
               }
               this.planner.plan = await response.json();
+              this.planner.shoppingAddState = {};
+              this.planner.shoppingAddedShortfalls = {};
+              this.planner.shoppingBulkState = {};
               this.initializeServingTarget(this.planner.plan, context);
               this.planner.showRaw = false;
               this.planner.status = "Plan generated successfully.";
               this.planner.statusColor = "text-green-300";
             } catch (error) {
               this.planner.plan = null;
+              this.planner.shoppingAddState = {};
+              this.planner.shoppingAddedShortfalls = {};
+              this.planner.shoppingBulkState = {};
               this.planner.status = `Error: ${error.message}`;
               this.planner.statusColor = "text-red-300";
             } finally {
