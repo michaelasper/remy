@@ -5,6 +5,8 @@
 
 Remy is a FastAPI + Vue sous-chef—named after the tiny rat from *Ratatouille*—that turns pantry data into daily dinner plans. It reads inventory, meals, and preferences from SQLite, proposes 2–3 options, and keeps the shopping list, receipts, and OCR pipeline in sync so your inner rodent chef can plate dinner on time.
 
+![Remy UI preview](docs/images/remy-ui.png)
+
 ## Quick Start
 
 1. **Clone & install**
@@ -43,6 +45,7 @@ Remy is a FastAPI + Vue sous-chef—named after the tiny rat from *Ratatouille*�
 - [Testing strategy](docs/testing.md)
 - [Release process & CLI image](docs/releases.md)
 - [GitHub MCP integration](docs/mcp.md)
+- [Screenshot capture helper](docs/screenshots.md)
 - More docs live inside `docs/`.
 
 ## License
