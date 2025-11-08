@@ -53,6 +53,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "remy.server.templates" = ["*.html"]
+"remy.server.static" = ["**/*"]
 
 [tool.coverage.run]
 branch = true

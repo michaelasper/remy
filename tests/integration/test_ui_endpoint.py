@@ -21,3 +21,13 @@ def test_receipts_page_served(client):
     assert response.status_code == status.HTTP_200_OK
     assert "Remy Control Center" in response.text
     assert "Upload Receipt" in response.text
+
+
+def test_static_assets_served(client):
+    vue_response = client.get("/static/vendor/vue.global.prod.js")
+    assert vue_response.status_code == status.HTTP_200_OK
+    assert "vue v" in vue_response.text.lower()
+
+    tailwind_response = client.get("/static/vendor/tailwind.cdn.js")
+    assert tailwind_response.status_code == status.HTTP_200_OK
+    assert "tailwind" in tailwind_response.text.lower()

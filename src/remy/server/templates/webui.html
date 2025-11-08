@@ -4,9 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Remy Control Center</title>
-    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
     <script>
-      tailwind.config = {
+      window.tailwind = window.tailwind || {};
+      window.tailwind.config = {
         theme: {
           extend: {
             colors: {
@@ -27,7 +27,8 @@
         },
       };
     </script>
-    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="/static/vendor/tailwind.cdn.js"></script>
+    <script src="/static/vendor/vue.global.prod.js"></script>
   </head>
   <body class="min-h-screen bg-slate-950 text-slate-100 selection:bg-primary-500/40">
     <script type="application/json" id="sample-context">__SAMPLE_CONTEXT__</script>

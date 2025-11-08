@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date
+from importlib import resources
 from time import perf_counter
 from typing import Any, Optional
 from uuid import uuid4
@@ -24,6 +25,7 @@ from fastapi import (
 )
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
@@ -99,6 +101,13 @@ def create_app() -> FastAPI:
     _configure_logging(settings)
 
     application = FastAPI(title="Remy Dinner Planner", version=__version__)
+
+    static_dir = resources.files("remy.server.static")
+    application.mount(
+        "/static",
+        StaticFiles(directory=str(static_dir)),
+        name="static",
+    )
 
     ocr_worker: ReceiptOcrWorker | None = None
     ocr_scheduler: AsyncIOScheduler | None = None
