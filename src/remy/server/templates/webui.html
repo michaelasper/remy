@@ -1434,7 +1434,7 @@
                 throw new Error(`Planner request failed (${response.status}): ${detail}`);
               }
               this.planner.plan = await response.json();
-              this.initializeServingTarget(this.planner.plan, payload);
+              this.initializeServingTarget(this.planner.plan, context);
               this.planner.showRaw = false;
               this.planner.status = "Plan generated successfully.";
               this.planner.statusColor = "text-green-300";
