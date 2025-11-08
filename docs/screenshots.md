@@ -17,9 +17,9 @@ Remy ships a Playwright helper to grab deterministic UI screenshots — handy fo
 scripts/capture_ui.py \
   --url http://localhost:8000/ \
   --output docs/images/remy-ui.png \
-  --width 1280 --height 720 --delay 2
+  --width 1600 --height 900 --delay 2 --scale 1.5
 ```
 
-The defaults match the example above, so `scripts/capture_ui.py` is usually enough. The script waits for network idle, pauses briefly for Vue to finish rendering, and captures a full-page PNG.
+Omit the flags if you're happy with those defaults. Pass `--full-page` when you want the entire scroll height; otherwise it captures just the viewport to keep screenshots readable.
 
 Commit the refreshed `docs/images/remy-ui.png` when you want the README preview to reflect new UI changes.

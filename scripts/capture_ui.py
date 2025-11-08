@@ -11,19 +11,30 @@ from playwright.sync_api import sync_playwright
 
 DEFAULT_URL = "http://localhost:8000/"
 DEFAULT_OUT = pathlib.Path("docs/images/remy-ui.png")
-DEFAULT_VIEWPORT = (1280, 720)
+DEFAULT_VIEWPORT = (1600, 900)
 DEFAULT_DELAY = 2.0
+DEFAULT_SCALE = 1.5
 
 
-def capture(url: str, output: pathlib.Path, viewport: tuple[int, int], delay: float) -> None:
+def capture(
+    url: str,
+    output: pathlib.Path,
+    viewport: tuple[int, int],
+    delay: float,
+    scale: float,
+    full_page: bool,
+) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
-        context = browser.new_context(viewport={"width": viewport[0], "height": viewport[1]})
+        context = browser.new_context(
+            viewport={"width": viewport[0], "height": viewport[1]},
+            device_scale_factor=scale,
+        )
         page = context.new_page()
         page.goto(url, wait_until="networkidle")
         time.sleep(delay)
-        page.screenshot(path=str(output), full_page=True)
+        page.screenshot(path=str(output), full_page=full_page)
         browser.close()
 
 
@@ -34,9 +45,22 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--width", type=int, default=DEFAULT_VIEWPORT[0], help="Viewport width")
     parser.add_argument("--height", type=int, default=DEFAULT_VIEWPORT[1], help="Viewport height")
     parser.add_argument("--delay", type=float, default=DEFAULT_DELAY, help="Seconds to wait after load")
+    parser.add_argument("--scale", type=float, default=DEFAULT_SCALE, help="Device scale factor")
+    parser.add_argument(
+        "--full-page",
+        action="store_true",
+        help="Capture the entire scroll height (defaults to viewport only)",
+    )
     args = parser.parse_args(argv)
 
-    capture(args.url, args.output, (args.width, args.height), args.delay)
+    capture(
+        args.url,
+        args.output,
+        (args.width, args.height),
+        args.delay,
+        args.scale,
+        args.full_page,
+    )
     print(f"Saved screenshot to {args.output}")
     return 0
 
