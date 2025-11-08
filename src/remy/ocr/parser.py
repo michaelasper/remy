@@ -6,7 +6,7 @@ import dataclasses
 import logging
 import re
 from datetime import date
-from typing import Callable, Dict, Iterable, List, Optional
+from typing import Callable, Iterable, List, Optional
 
 from rapidfuzz import fuzz, process
 
@@ -303,7 +303,11 @@ class ReceiptParser:
         text: str,
         items: List[ReceiptLineItem],
     ) -> tuple[List[ReceiptLineItem], dict[str, object]]:
-        summary: dict[str, object] = {"enabled": bool(self._llm_client), "added": [], "enriched": []}
+        summary: dict[str, object] = {
+            "enabled": bool(self._llm_client),
+            "added": [],
+            "enriched": [],
+        }
         if not self._llm_client:
             return items, summary
         try:

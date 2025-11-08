@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from remy.rag.recipe1m import convert_recipe1m
 

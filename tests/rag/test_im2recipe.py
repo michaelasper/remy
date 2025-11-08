@@ -6,8 +6,6 @@ import json
 from datetime import date
 from pathlib import Path
 
-import pytest
-
 from remy.models.context import Constraints, InventoryItem, PlanningContext, Preferences
 from remy.rag.im2recipe import Im2RecipeRAG, ensure_im2recipe_model
 

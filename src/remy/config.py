@@ -62,7 +62,10 @@ class Settings(BaseModel):
     )
     planner_llm_base_url: Optional[str] = Field(
         default=None,
-        description="Planner LLM base URL (OpenAI-compatible runtime such as llama.cpp, vLLM, etc.).",
+        description=(
+            "Planner LLM base URL (OpenAI-compatible runtime such as llama.cpp, "
+            "vLLM, etc.)."
+        ),
     )
     planner_llm_model: str = Field(
         default="Qwen/Qwen1.5-0.5B-Chat",

@@ -11,7 +11,7 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
-from typing import Iterable, List, Sequence
+from typing import List, Sequence
 
 import numpy as np
 from annoy import AnnoyIndex

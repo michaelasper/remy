@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from dataclasses import dataclass
@@ -55,22 +54,29 @@ SYSTEM_PROMPT = (
     '      "servings": number,\n'
     '      "steps": ["short imperative sentence", ...],\n'
     '      "ingredients_required": [\n'
-    '        {"ingredient_id": number|null, "name": "string", "qty_g": number, "qty_ml": number|null, "qty_count": number|null}\n'
+    '        {"ingredient_id": number|null, "name": "string", "qty_g": number,\n'
+    '         "qty_ml": number|null, "qty_count": number|null}\n'
     '      ],\n'
     '      "inventory_deltas": [\n'
-    '        {"ingredient_id": number, "use_g": number|null, "use_ml": number|null, "use_count": number|null}\n'
+    '        {"ingredient_id": number, "use_g": number|null,\n'
+    '         "use_ml": number|null, "use_count": number|null}\n'
     '      ],\n'
     '      "shopping_shortfall": [\n'
-    '        {"ingredient_id": number|null, "name": "string", "need_g": number|null, "need_ml": number|null, "need_count": number|null, "reason": "not_in_inventory|insufficient_stock"}\n'
+    '        {"ingredient_id": number|null, "name": "string",\n'
+    '         "need_g": number|null, "need_ml": number|null,\n'
+    '         "need_count": number|null,\n'
+    '         "reason": "not_in_inventory|insufficient_stock"}\n'
     '      ],\n'
-    '      "macros_per_serving": {"kcal": number|null, "protein_g": number|null, "carb_g": number|null, "fat_g": number|null}|null\n'
+    '      "macros_per_serving": {"kcal": number|null, "protein_g": number|null,\n'
+    '         "carb_g": number|null, "fat_g": number|null}|null\n'
     '    }\n'
     '  ]\n'
     '}\n'
     "Rules: candidates array MUST contain 2 or 3 entries, steps must be an array (no combined paragraphs), "
-    "include inventory_deltas for every ingredient that exists in inventory, and list shopping_shortfall rows for "
-    "any ingredient that is missing OR insufficient so new groceries can be purchased. "
-    "Draw inspiration from any recipe snippets provided and make each candidate feel complete (protein + sides or garnishes). "
+    "include inventory_deltas for every ingredient that exists in inventory, and list shopping_shortfall rows "
+    "for any ingredient that is missing OR insufficient so new groceries can be purchased. "
+    "Draw inspiration from any recipe snippets provided and make each candidate feel complete "
+    "(protein + sides or garnishes). "
     "Do not emit prose, Markdown, or keys outside this schema. "
     "Example output:\n"
     '{\n'
@@ -82,13 +88,16 @@ SYSTEM_PROMPT = (
     '      "servings": 2,\n'
     '      "steps": ["press tofu", "sear tofu", "stir-fry vegetables", "combine and serve"],\n'
     '      "ingredients_required": [\n'
-    '        {"ingredient_id": 1, "name": "tofu", "qty_g": 350, "qty_ml": null, "qty_count": null}\n'
+    '        {"ingredient_id": 1, "name": "tofu", "qty_g": 350,\n'
+    '         "qty_ml": null, "qty_count": null}\n'
     '      ],\n'
     '      "inventory_deltas": [\n'
-    '        {"ingredient_id": 1, "use_g": 350, "use_ml": null, "use_count": null}\n'
+    '        {"ingredient_id": 1, "use_g": 350,\n'
+    '         "use_ml": null, "use_count": null}\n'
     '      ],\n'
     '      "shopping_shortfall": [],\n'
-    '      "macros_per_serving": {"kcal": 420, "protein_g": 30, "carb_g": 18, "fat_g": 20}\n'
+    '      "macros_per_serving": {"kcal": 420, "protein_g": 30,\n'
+    '         "carb_g": 18, "fat_g": 20}\n'
     '    },\n'
     '    {\n'
     '      "title": "Chickpea Coconut Curry",\n'
@@ -96,15 +105,20 @@ SYSTEM_PROMPT = (
     '      "servings": 2,\n'
     '      "steps": ["sauté aromatics", "simmer chickpeas with coconut milk", "finish with spinach"],\n'
     '      "ingredients_required": [\n'
-    '        {"ingredient_id": null, "name": "canned chickpeas", "qty_g": 400, "qty_ml": null, "qty_count": null},\n'
-    '        {"ingredient_id": null, "name": "coconut milk", "qty_g": 350, "qty_ml": null, "qty_count": null},\n'
-    '        {"ingredient_id": null, "name": "spinach", "qty_g": 150, "qty_ml": null, "qty_count": null}\n'
+    '        {"ingredient_id": null, "name": "canned chickpeas", "qty_g": 400,\n'
+    '         "qty_ml": null, "qty_count": null},\n'
+    '        {"ingredient_id": null, "name": "coconut milk", "qty_g": 350,\n'
+    '         "qty_ml": null, "qty_count": null},\n'
+    '        {"ingredient_id": null, "name": "spinach", "qty_g": 150,\n'
+    '         "qty_ml": null, "qty_count": null}\n'
     '      ],\n'
     '      "inventory_deltas": [],\n'
     '      "shopping_shortfall": [\n'
-    '        {"ingredient_id": null, "name": "canned chickpeas", "need_g": 400, "need_ml": null, "need_count": null, "reason": "not_in_inventory"}\n'
+    '        {"ingredient_id": null, "name": "canned chickpeas", "need_g": 400,\n'
+    '         "need_ml": null, "need_count": null, "reason": "not_in_inventory"}\n'
     '      ],\n'
-    '      "macros_per_serving": {"kcal": 480, "protein_g": 20, "carb_g": 30, "fat_g": 25}\n'
+    '      "macros_per_serving": {"kcal": 480, "protein_g": 20,\n'
+    '         "carb_g": 30, "fat_g": 25}\n'
     '    }\n'
     '  ]\n'
     '}\n'
@@ -254,7 +268,10 @@ def _log_snippet_telemetry(
 ) -> None:
     enabled = bool(telemetry.get("enabled"))
     logger.info(
-        "Planner snippet telemetry source=%s enabled=%s keywords=%s auto_terms=%s web_hits=%s rag_hits=%s rag_titles=%s diet=%s",
+        (
+            "Planner snippet telemetry source=%s enabled=%s keywords=%s "
+            "auto_terms=%s web_hits=%s rag_hits=%s rag_titles=%s diet=%s"
+        ),
         source,
         enabled,
         telemetry.get("keyword_overrides") or [],

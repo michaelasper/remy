@@ -31,7 +31,13 @@ from remy.config import Settings, get_settings
 from remy.db.receipts import update_receipt_ocr
 from remy.ingest import ingest_receipt_items
 from remy.logging_utils import configure_logging as configure_app_logging
-from remy.models.context import InventoryItem, LeftoverItem, PlanningContext, Preferences, RecentMeal
+from remy.models.context import (
+    InventoryItem,
+    LeftoverItem,
+    PlanningContext,
+    Preferences,
+    RecentMeal,
+)
 from remy.models.plan import Plan, ShoppingShortfall
 from remy.models.receipt import (
     InventorySuggestion as InventorySuggestionModel,

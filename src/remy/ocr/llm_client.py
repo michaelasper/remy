@@ -85,7 +85,9 @@ class ReceiptLLMClient:
             parsed = json.loads(json_blob)
         except json.JSONDecodeError as exc:
             snippet = json_blob.strip().replace("\n", " ")[:200]
-            raise ValueError(f"Receipt LLM returned invalid JSON: {exc}: payload={snippet}") from exc
+            raise ValueError(
+                f"Receipt LLM returned invalid JSON: {exc}: payload={snippet}"
+            ) from exc
 
         items_payload = parsed.get("items") or []
         enhanced: List[ReceiptLineItem] = []

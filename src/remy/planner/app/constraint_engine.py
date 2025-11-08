@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from remy.models.context import InventoryItem, LeftoverItem, PlanningContext
 
@@ -18,7 +18,6 @@ from .utils import (
 
 if TYPE_CHECKING:  # pragma: no cover - type-only imports
     from .planner import Recipe
-    from .planner import RecipeIngredient
 
 
 @dataclass(frozen=True)
@@ -293,7 +292,11 @@ class ConstraintEngine:
         self._hard_rules = tuple(hard_rules)
         self._soft_rules = tuple(soft_rules)
 
-    def evaluate_recipe(self, recipe: "Recipe", snapshot: PlanningSnapshot) -> Optional[ConstraintEvaluation]:
+    def evaluate_recipe(
+        self,
+        recipe: "Recipe",
+        snapshot: PlanningSnapshot,
+    ) -> Optional[ConstraintEvaluation]:
         """Evaluate a recipe, returning a scored evaluation if constraints pass."""
         results: List[RuleResult] = []
 

@@ -185,7 +185,10 @@ class DiffValidator(Agent[tuple[PlanningContext, Plan], Plan]):
                 deficit = req_amount - use_amount
                 if deficit > 1e-6:
                     logger.info(
-                        "DiffValidator clamp ingredient_id=%s name=%s requested=%.2f%s available=%.2f%s",
+                        (
+                            "DiffValidator clamp ingredient_id=%s name=%s "
+                            "requested=%.2f%s available=%.2f%s"
+                        ),
                         inventory_id,
                         requirement.name,
                         req_amount,

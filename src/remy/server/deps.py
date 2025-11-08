@@ -14,13 +14,13 @@ from remy.db.inventory import (
     list_inventory,
     update_inventory_item,
 )
+from remy.db.inventory_suggestions import approve_suggestion, delete_suggestion, list_suggestions
 from remy.db.leftovers import (
     create_leftover_item,
     delete_leftover_item,
     list_leftovers,
     update_leftover_item,
 )
-from remy.db.inventory_suggestions import approve_suggestion, delete_suggestion, list_suggestions
 from remy.db.meals import delete_meal, list_recent_meals, record_meal
 from remy.db.preferences import load_preferences, save_preferences
 from remy.db.receipts import (
@@ -39,7 +39,13 @@ from remy.db.shopping_list import (
     reset_shopping_list,
     update_shopping_item,
 )
-from remy.models.context import InventoryItem, LeftoverItem, PlanningContext, Preferences, RecentMeal
+from remy.models.context import (
+    InventoryItem,
+    LeftoverItem,
+    PlanningContext,
+    Preferences,
+    RecentMeal,
+)
 from remy.models.plan import Plan
 from remy.models.receipt import InventorySuggestion, Receipt, ReceiptLineItem, ReceiptOcrResult
 from remy.models.shopping import ShoppingListItem
