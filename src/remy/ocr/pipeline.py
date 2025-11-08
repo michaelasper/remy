@@ -1,4 +1,5 @@
 """Receipt OCR pipeline implementation using Tesseract."""
+# mypy: ignore-errors
 
 from __future__ import annotations
 

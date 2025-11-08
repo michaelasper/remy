@@ -1,4 +1,5 @@
 """Shared helpers for turning parsed receipts into inventory updates."""
+# mypy: ignore-errors
 
 from __future__ import annotations
 

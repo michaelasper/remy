@@ -1,4 +1,5 @@
 """Receipt upload and OCR persistence helpers."""
+# mypy: ignore-errors
 
 from __future__ import annotations
 

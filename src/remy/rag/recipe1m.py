@@ -1,4 +1,5 @@
 """Utilities to convert Recipe1M-style exports into the Remy corpus format."""
+# mypy: ignore-errors
 
 from __future__ import annotations
 

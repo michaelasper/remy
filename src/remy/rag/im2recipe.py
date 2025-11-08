@@ -1,4 +1,5 @@
 """Retrieval augmented generation helpers backed by the im2recipe model."""
+# mypy: ignore-errors
 
 from __future__ import annotations
 

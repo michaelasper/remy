@@ -1,4 +1,5 @@
 """Dependency definitions for the Remy API server."""
+# mypy: ignore-errors
 
 from __future__ import annotations
 

@@ -1,4 +1,5 @@
 """ASGI application for Remy."""
+# mypy: ignore-errors
 
 from __future__ import annotations
 

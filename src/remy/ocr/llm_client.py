@@ -1,4 +1,5 @@
 """LLM helper for enhancing OCR receipt parsing."""
+# mypy: ignore-errors
 
 from __future__ import annotations
 

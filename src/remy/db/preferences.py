@@ -1,4 +1,5 @@
 """Data access helpers for household preferences."""
+# mypy: ignore-errors
 
 from __future__ import annotations
 

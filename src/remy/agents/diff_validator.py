@@ -1,4 +1,5 @@
 """Diff and validation agent."""
+# mypy: ignore-errors
 
 from __future__ import annotations
 

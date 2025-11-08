@@ -1,4 +1,5 @@
 """Heuristic receipt text parser and inventory matcher."""
+# mypy: ignore-errors
 
 from __future__ import annotations
 

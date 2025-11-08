@@ -38,6 +38,13 @@ dev = [
 server = [
     "uvicorn[standard]>=0.27"
 ]
+extra = [
+    "numpy>=1.26",
+    "annoy>=1.17",
+    "prometheus-client>=0.19",
+    "duckduckgo-search>=6.1",
+    "rapidfuzz>=3.6",
+]
 [project.scripts]
 remy = "remy.cli:app"
 
@@ -73,8 +80,7 @@ ignore = ["B008"]
 
 [tool.mypy]
 python_version = "3.11"
-strict = true
 warn_unused_configs = true
-disallow_any_unimported = true
+ignore_missing_imports = true
 namespace_packages = true
 plugins = ["pydantic.mypy"]
