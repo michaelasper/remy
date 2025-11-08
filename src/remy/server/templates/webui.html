@@ -1784,7 +1784,7 @@
               return "";
             }
             const now = Date.now();
-            const staleAges: number[] = [];
+            const staleAges = [];
             for (const item of items) {
               if (item.is_checked) {
                 continue;
