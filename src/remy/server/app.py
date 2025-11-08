@@ -31,8 +31,8 @@ from remy.config import Settings, get_settings
 from remy.db.receipts import update_receipt_ocr
 from remy.ingest import ingest_receipt_items
 from remy.logging_utils import configure_logging as configure_app_logging
-from remy.models.context import InventoryItem, PlanningContext, Preferences, RecentMeal
-from remy.models.plan import Plan
+from remy.models.context import InventoryItem, LeftoverItem, PlanningContext, Preferences, RecentMeal
+from remy.models.plan import Plan, ShoppingShortfall
 from remy.models.receipt import (
     InventorySuggestion as InventorySuggestionModel,
 )
@@ -218,6 +218,12 @@ def create_app() -> FastAPI:
         attendees: Optional[int] = Query(default=None, ge=1),
         time_window: Optional[str] = Query(default=None, min_length=1, max_length=64),
         recent_meals: int = Query(default=14, ge=0, le=60),
+        diet_override: Optional[str] = Query(default=None, min_length=1, max_length=255),
+        allergens: Optional[list[str]] = Query(default=None),
+        max_time_min: Optional[int] = Query(default=None, ge=0, le=240),
+        preferred_cuisines: Optional[list[str]] = Query(default=None),
+        recipe_search: Optional[bool] = Query(default=None),
+        search_keywords: Optional[list[str]] = Query(default=None),
         auth: None = Depends(deps.require_api_token),
     ) -> PlanningContext:
         target_date = context_date or date.today()
@@ -226,6 +232,12 @@ def create_app() -> FastAPI:
             attendees=attendees,
             time_window=time_window,
             recent_meal_limit=recent_meals,
+            diet_override=diet_override,
+            allergens_override=allergens,
+            max_time_override=max_time_min,
+            preferred_cuisines=preferred_cuisines,
+            recipe_search_enabled=recipe_search,
+            recipe_search_keywords=search_keywords,
         )
 
     @application.post("/plan", response_model=Plan, summary="Generate dinner candidates")
@@ -233,10 +245,17 @@ def create_app() -> FastAPI:
         context: PlanningContext,
         auth: None = Depends(deps.require_api_token),
         plan_generator: deps.PlanGenerator = Depends(deps.get_plan_generator),
+        shopping_list_provider: deps.ShoppingListProvider = Depends(deps.get_shopping_list_provider),
+        shopping_list_creator: deps.ShoppingListCreator = Depends(deps.get_shopping_list_creator),
     ) -> Plan:
         """Generate candidate dinner plans from the provided context payload."""
 
-        return plan_generator(context)
+        plan = plan_generator(context)
+        try:
+            _auto_add_shortfalls_to_shopping_list(plan, shopping_list_provider, shopping_list_creator)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.warning("Auto-add shopping shortfalls failed: %s", exc)
+        return plan
 
     @application.get(
         "/inventory",
@@ -318,6 +337,66 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     @application.get(
+        "/leftovers",
+        response_model=list[LeftoverItem],
+        summary="List tracked leftovers",
+    )
+    def leftovers_list(
+        provider: deps.LeftoverProvider = Depends(deps.get_leftover_provider),
+    ) -> list[LeftoverItem]:
+        return provider()
+
+    @application.post(
+        "/leftovers",
+        response_model=LeftoverItem,
+        status_code=status.HTTP_201_CREATED,
+        summary="Create leftover record",
+    )
+    def leftovers_create(
+        payload: LeftoverCreateRequest = Body(...),
+        auth: None = Depends(deps.require_api_token),
+        creator: deps.LeftoverCreator = Depends(deps.get_leftover_creator),
+    ) -> LeftoverItem:
+        return creator(payload.model_dump())
+
+    @application.put(
+        "/leftovers/{leftover_id}",
+        response_model=LeftoverItem,
+        summary="Update leftover record",
+    )
+    def leftovers_update(
+        leftover_id: int,
+        payload: LeftoverUpdateRequest = Body(...),
+        auth: None = Depends(deps.require_api_token),
+        updater: deps.LeftoverUpdater = Depends(deps.get_leftover_updater),
+    ) -> LeftoverItem:
+        update_payload = payload.model_dump(exclude_unset=True)
+        if not update_payload:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No fields provided for update",
+            )
+        try:
+            return updater(leftover_id, update_payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    @application.delete(
+        "/leftovers/{leftover_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        summary="Delete leftover record",
+    )
+    def leftovers_delete(
+        leftover_id: int,
+        auth: None = Depends(deps.require_api_token),
+        deleter: deps.LeftoverDeleter = Depends(deps.get_leftover_deleter),
+    ) -> None:
+        try:
+            deleter(leftover_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    @application.get(
         "/shopping-list",
         response_model=list[ShoppingListItem],
         summary="List shopping list items",
@@ -334,7 +413,7 @@ def create_app() -> FastAPI:
         summary="Create shopping list item",
     )
     def shopping_list_create(
-        payload: ShoppingListCreateRequest,
+        payload: ShoppingListCreateRequest = Body(...),
         auth: None = Depends(deps.require_api_token),
         creator: deps.ShoppingListCreator = Depends(deps.get_shopping_list_creator),
     ) -> ShoppingListItem:
@@ -347,7 +426,7 @@ def create_app() -> FastAPI:
     )
     def shopping_list_update(
         item_id: int,
-        payload: ShoppingListUpdateRequest,
+        payload: ShoppingListUpdateRequest = Body(...),
         auth: None = Depends(deps.require_api_token),
         updater: deps.ShoppingListUpdater = Depends(deps.get_shopping_list_updater),
     ) -> ShoppingListItem:
@@ -761,11 +840,6 @@ def create_app() -> FastAPI:
     return application
 
 
-app = create_app()
-
-__all__ = ["app", "create_app"]
-
-
 class ReceiptIngestItem(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     quantity: Optional[float] = Field(default=None, gt=0)
@@ -807,6 +881,22 @@ class InventoryUpdateRequest(BaseModel):
     notes: Optional[str] = Field(default=None, max_length=500)
 
 
+class LeftoverCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    quantity: float = Field(gt=0)
+    unit: str = Field(default="g", min_length=1, max_length=64)
+    best_before: Optional[date] = None
+    notes: Optional[str] = Field(default=None, max_length=1000)
+
+
+class LeftoverUpdateRequest(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    quantity: Optional[float] = Field(default=None, gt=0)
+    unit: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    best_before: Optional[date] = None
+    notes: Optional[str] = Field(default=None, max_length=1000)
+
+
 class ShoppingListCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     quantity: Optional[float] = Field(default=None, gt=0)
@@ -829,6 +919,81 @@ class ShoppingListAddToInventoryRequest(BaseModel):
     best_before: Optional[date] = Field(default=None)
     notes: Optional[str] = Field(default=None, max_length=500)
 
+ShoppingListCreateRequest.model_rebuild()
+ShoppingListUpdateRequest.model_rebuild()
+ShoppingListAddToInventoryRequest.model_rebuild()
+
+
+def _auto_add_shortfalls_to_shopping_list(
+    plan: Plan,
+    list_provider: deps.ShoppingListProvider,
+    list_creator: deps.ShoppingListCreator,
+) -> None:
+    shortfalls = [
+        (candidate, shortfall)
+        for candidate in plan.candidates
+        for shortfall in (candidate.shopping_shortfall or [])
+    ]
+    if not shortfalls:
+        return
+
+    existing_items = list_provider()
+    existing_names = {
+        (item.name or "").strip().lower() for item in existing_items if (item.name or "").strip()
+    }
+    additions = 0
+
+    for candidate, shortfall in shortfalls:
+        name = (shortfall.name or "").strip()
+        if not name:
+            continue
+        normalized = name.lower()
+        if normalized in existing_names:
+            continue
+
+        quantity, unit = _shortfall_quantity_and_unit(shortfall)
+        payload: dict[str, object] = {"name": name}
+        if quantity is not None:
+            payload["quantity"] = quantity
+        if unit:
+            payload["unit"] = unit
+        notes = f"Plan shortfall ({plan.date}): {candidate.title}"
+        payload["notes"] = notes[:500]
+
+        try:
+            list_creator(payload)
+        except Exception as exc:  # pragma: no cover - best effort logging
+            logger.warning("Failed to add shopping shortfall '%s' to list: %s", name, exc)
+            continue
+
+        existing_names.add(normalized)
+        additions += 1
+        logger.info(
+            "Shopping shortfall synced name=%s quantity=%s unit=%s plan=%s candidate=%s",
+            name,
+            payload.get("quantity"),
+            payload.get("unit"),
+            plan.date,
+            candidate.title,
+        )
+
+    if additions:
+        logger.info(
+            "Auto-added %s shopping shortfall item(s) for plan %s",
+            additions,
+            plan.date,
+        )
+
+
+def _shortfall_quantity_and_unit(shortfall: ShoppingShortfall) -> tuple[Optional[float], Optional[str]]:
+    if shortfall.need_g is not None:
+        return float(shortfall.need_g), "g"
+    if shortfall.need_ml is not None:
+        return float(shortfall.need_ml), "ml"
+    if shortfall.need_count is not None:
+        return float(shortfall.need_count), "count"
+    return None, None
+
 
 class PreferencesUpdateRequest(BaseModel):
     diet: Optional[str] = Field(default=None, max_length=255)
@@ -849,3 +1014,8 @@ class PreferencesUpdateRequest(BaseModel):
                 ]
                 data["allergens"] = normalized
         return data
+
+
+app = create_app()
+
+__all__ = ["app", "create_app"]

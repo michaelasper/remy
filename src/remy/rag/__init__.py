@@ -7,6 +7,8 @@ from remy.rag.im2recipe import (
     ensure_im2recipe_model,
     get_cached_rag,
 )
+from remy.rag.build_index import main as build_index
+from remy.rag.recipe1m import convert_recipe1m
 
 __all__ = [
     "IM2RECIPE_URL",
@@ -14,4 +16,6 @@ __all__ = [
     "RecipeDocument",
     "ensure_im2recipe_model",
     "get_cached_rag",
+    "build_index",
+    "convert_recipe1m",
 ]

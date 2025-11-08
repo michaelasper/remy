@@ -5,8 +5,14 @@ Remy is a multi-agent automation platform that assembles a daily dinner plan for
 ## Key Capabilities
 
 - Build a rich planning context from SQLite data, pantry leftovers, and household preferences.
+- Override diet, allergens, prep time, and cuisine constraints per run directly from the planner form without touching saved preferences.
+- Flip DuckDuckGo recipe search on/off per plan and steer it with custom keywords for inspiration when needed.
+- Emit LLM observability logs covering recipe snippet usage, RAG hits, and diet/allergen checks so constraint regressions are visible immediately.
+- Track RAG retrieval hits and log which inspirations make it into final meals to guide corpus/index tuning.
+- Sync planner shopping shortfalls directly into the shopping list and surface reminders when unchecked items linger too long.
 - Propose two to three balanced dinner candidates per day with prep time, servings, steps, and macros.
 - Normalize ingredient data, detect shopping shortfalls, and update the inventory after approval.
+- Surface planner diagnostics (unit fallbacks, macro estimates, constraint overrides) directly in the UI so humans can trust automated adjustments.
 - Manage a shared shopping list with instant reset controls and one-tap inventory sync once groceries are in hand.
 - Enrich LLM prompts with retrieval-augmented recipe snippets seeded by the im2recipe model.
 - Notify the household by 15:00 local time and dispatch any required shopping list updates.
@@ -39,9 +45,9 @@ Remy is organized as a collection of focused agents that collaborate through sha
 
 | Agent | Role | Primary Inputs | Main Outputs | Notes |
 | --- | --- | --- | --- | --- |
-| Context Assembler | Gather all data needed for planning. | SQLite (inventory, meals, preferences), leftovers | `planning_context.json` | Prepares structured context for the planner. |
+| Context Assembler | Gather all data needed for planning. | SQLite (inventory, meals, preferences), leftovers | `planning_context.json` | Prepares structured context for the planner, honors per-run overrides, and carries recipe-search toggles/keywords. |
 | Menu Planner | Design candidate meal plans. | `planning_context.json` | Plan JSON | Starts with a mocked planner; upgrades to a local LLM (llama.cpp/vLLM/Ollama) later. |
-| Diff & Validator | Canonicalize ingredients and compute shortages. | Planner output, inventory DB | Normalized plan, `shopping_shortfall` | Ensures schema compliance and consistent naming. |
+| Diff & Validator | Canonicalize ingredients and compute shortages. | Planner output, inventory DB | Normalized plan, `shopping_shortfall` | Clamps deltas, expands units (kg/lb/cups), recomputes macros, and emits diagnostics for the UI/logs. |
 | Approvals Orchestrator | Handle human approval, mutations, and notifications. | Normalized plan | Approved meal, inventory updates | Applies changes transactionally. |
 | Shopping Dispatcher | Sync shortfalls to shopping endpoints. | `shopping_shortfall` | Home Assistant API calls | Future integrations include Instacart and Amazon carts. |
 | Receipt Ingestor | Update inventory from receipts. | CSV/email/OCR data | Inventory upserts | Enables passive inventory updates. |
@@ -102,9 +108,9 @@ Remy can now pass OCR text through the same OpenAI-compatible runtime you point 
 ### Im2Recipe Retrieval-Augmented Generation
 
 - Run `make rag-setup` (or `python -m remy.rag.setup`) once to download and decompress `im2recipe_model.t7.gz` into `./data/models/im2recipe_model.t7`. The artifact is ignored by Git and only lives on your machine.
-- `data/rag/recipes_seed.json` seeds the retrieval corpus. Append your own recipes or point `REMY_RAG_CORPUS_PATH` at a different JSON file.
-- Export `REMY_RAG_ENABLED=1` so the planner prompt automatically receives the top-k hashed matches. Additional knobs: `REMY_RAG_MODEL_PATH`, `REMY_RAG_TOP_K`, and `REMY_RAG_EMBEDDING_DIM`.
-- Retrieval uses a feature-hashing embedding salted by the im2recipe model bytes, so swapping in an updated checkpoint immediately reshapes which recipes surface for a given pantry snapshot.
+- To ingest the full Recipe1M dataset, download the official export, then run `python -m remy.rag.recipe1m --input ~/Downloads/recipes_raw_nosource_fn.json.gz --output data/rag/recipes_recipe1m.json --limit 50000` (adjust limit to taste). Point `REMY_RAG_CORPUS_PATH` at the generated JSON file.
+- Build or refresh the Annoy index with `make rag-build-index` (uses `REMY_RAG_INDEX_PATH`, `REMY_RAG_INDEX_TREES`, and `REMY_RAG_EMBEDDING_DIM`), then export `REMY_RAG_ENABLED=1` so the planner prompt automatically receives the top-k matches.
+- Retrieval uses a feature-hashing embedding salted by the im2recipe model bytes, and the Annoy index keeps lookups fast even when the corpus grows to tens of thousands of recipes.
 
 ## Shopping List Flow
 

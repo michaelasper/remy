@@ -132,6 +132,14 @@ class Settings(BaseModel):
         default=384,
         description="Feature hashing dimension for the RAG vectorizer.",
     )
+    rag_index_path: Path = Field(
+        default=Path("./data/rag/index.ann"),
+        description="Annoy index location for the recipe corpus.",
+    )
+    rag_index_trees: int = Field(
+        default=50,
+        description="Number of Annoy trees to use when building the recipe index.",
+    )
 
     model_config = ConfigDict(frozen=True)
 
@@ -257,6 +265,13 @@ def _load_from_env() -> dict[str, object]:
     if (rag_dim := _env("REMY_RAG_EMBEDDING_DIM")):
         try:
             payload["rag_embedding_dim"] = int(rag_dim)
+        except ValueError:
+            pass
+    if (rag_index_path := _env("REMY_RAG_INDEX_PATH")):
+        payload["rag_index_path"] = Path(rag_index_path)
+    if (rag_index_trees := _env("REMY_RAG_INDEX_TREES")):
+        try:
+            payload["rag_index_trees"] = int(rag_index_trees)
         except ValueError:
             pass
     return payload

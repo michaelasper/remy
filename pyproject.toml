@@ -22,9 +22,10 @@ dependencies = [
     "pytesseract>=0.3.10",
     "pdf2image>=1.17",
     "rapidfuzz>=3.6",
-    "prometheus-client>=0.19"
-    ,"duckduckgo-search>=6.1",
-    "numpy>=1.26"
+    "prometheus-client>=0.19",
+    "duckduckgo-search>=6.1",
+    "numpy>=1.26",
+    "annoy>=1.17"
 ]
 
 [project.optional-dependencies]

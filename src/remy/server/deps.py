@@ -14,6 +14,12 @@ from remy.db.inventory import (
     list_inventory,
     update_inventory_item,
 )
+from remy.db.leftovers import (
+    create_leftover_item,
+    delete_leftover_item,
+    list_leftovers,
+    update_leftover_item,
+)
 from remy.db.inventory_suggestions import approve_suggestion, delete_suggestion, list_suggestions
 from remy.db.meals import delete_meal, list_recent_meals, record_meal
 from remy.db.preferences import load_preferences, save_preferences
@@ -33,7 +39,7 @@ from remy.db.shopping_list import (
     reset_shopping_list,
     update_shopping_item,
 )
-from remy.models.context import InventoryItem, PlanningContext, Preferences, RecentMeal
+from remy.models.context import InventoryItem, LeftoverItem, PlanningContext, Preferences, RecentMeal
 from remy.models.plan import Plan
 from remy.models.receipt import InventorySuggestion, Receipt, ReceiptLineItem, ReceiptOcrResult
 from remy.models.shopping import ShoppingListItem
@@ -45,6 +51,10 @@ InventoryProvider = Callable[[], List[InventoryItem]]
 InventoryCreator = Callable[[dict], InventoryItem]
 InventoryUpdater = Callable[[int, dict], InventoryItem]
 InventoryDeleter = Callable[[int], None]
+LeftoverProvider = Callable[[], List[LeftoverItem]]
+LeftoverCreator = Callable[[dict], LeftoverItem]
+LeftoverUpdater = Callable[[int, dict], LeftoverItem]
+LeftoverDeleter = Callable[[int], None]
 PreferencesProvider = Callable[[], Preferences]
 PreferencesSaver = Callable[[Preferences], Preferences]
 ReceiptListProvider = Callable[[], List[Receipt]]
@@ -93,6 +103,22 @@ def get_inventory_updater() -> InventoryUpdater:
 
 def get_inventory_deleter() -> InventoryDeleter:
     return lambda item_id: delete_inventory_item(item_id)
+
+
+def get_leftover_provider() -> LeftoverProvider:
+    return list_leftovers
+
+
+def get_leftover_creator() -> LeftoverCreator:
+    return lambda payload: create_leftover_item(**payload)
+
+
+def get_leftover_updater() -> LeftoverUpdater:
+    return lambda leftover_id, payload: update_leftover_item(leftover_id, **payload)
+
+
+def get_leftover_deleter() -> LeftoverDeleter:
+    return lambda leftover_id: delete_leftover_item(leftover_id)
 
 
 def get_preferences_provider() -> PreferencesProvider:

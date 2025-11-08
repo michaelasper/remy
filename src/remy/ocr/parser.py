@@ -6,7 +6,7 @@ import dataclasses
 import logging
 import re
 from datetime import date
-from typing import Callable, Iterable, List, Optional
+from typing import Callable, Dict, Iterable, List, Optional
 
 from rapidfuzz import fuzz, process
 
@@ -122,8 +122,21 @@ class ReceiptParser:
 
             items.append(parsed)
 
-        self._augment_known_products(text, items)
-        items = self._apply_llm_enhancements(text, items)
+        heuristic_augments = self._augment_known_products(text, items)
+        items, llm_summary = self._apply_llm_enhancements(text, items)
+
+        if heuristic_augments:
+            logger.info(
+                "Receipt heuristics added %s item(s): %s",
+                len(heuristic_augments),
+                heuristic_augments,
+            )
+        if llm_summary.get("enabled"):
+            logger.info(
+                "Receipt LLM enhancement summary added=%s enriched=%s",
+                len(llm_summary.get("added", [])),
+                len(llm_summary.get("enriched", [])),
+            )
 
         return ReceiptStructuredData(
             store_name=store_name,
@@ -261,9 +274,10 @@ class ReceiptParser:
         matched_item = inventory[index]
         return InventoryMatch(item_id=matched_item.id, name=matched_name, score=score)
 
-    def _augment_known_products(self, text: str, items: List[ReceiptLineItem]) -> None:
+    def _augment_known_products(self, text: str, items: List[ReceiptLineItem]) -> List[str]:
         existing = {_normalize_line(item.name).strip().lower() for item in items}
         lowered = text.lower()
+        additions: List[str] = []
         for canonical, patterns in _KNOWN_PRODUCTS.items():
             normalized = canonical.strip().lower()
             if normalized in existing:
@@ -281,42 +295,57 @@ class ReceiptParser:
                     )
                 )
                 existing.add(normalized)
+                additions.append(canonical)
+        return additions
 
     def _apply_llm_enhancements(
         self,
         text: str,
         items: List[ReceiptLineItem],
-    ) -> List[ReceiptLineItem]:
+    ) -> tuple[List[ReceiptLineItem], dict[str, object]]:
+        summary: dict[str, object] = {"enabled": bool(self._llm_client), "added": [], "enriched": []}
         if not self._llm_client:
-            return items
+            return items, summary
         try:
             llm_items = self._llm_client.parse_items(text, items)
         except Exception as exc:
             logger.warning("Receipt LLM enhancement failed: %s", exc)
-            return items
+            summary["error"] = str(exc)
+            return items, summary
         if not llm_items:
-            return items
-        return self._merge_llm_items(items, llm_items)
+            return items, summary
+        merged_items, merge_summary = self._merge_llm_items(items, llm_items)
+        summary.update(merge_summary)
+        return merged_items, summary
 
     def _merge_llm_items(
         self,
         base_items: List[ReceiptLineItem],
         llm_items: List[ReceiptLineItem],
-    ) -> List[ReceiptLineItem]:
+    ) -> tuple[List[ReceiptLineItem], dict[str, List[str]]]:
         normalized = {_canonical_name(item.name): item for item in base_items}
+        added: List[str] = []
+        enriched: List[str] = []
         for candidate in llm_items:
             key = _canonical_name(candidate.name)
             existing = normalized.get(key)
             if existing:
+                updated_fields: List[str] = []
                 if existing.quantity is None and candidate.quantity is not None:
                     existing.quantity = candidate.quantity
+                    updated_fields.append("quantity")
                 if not existing.unit and candidate.unit:
                     existing.unit = candidate.unit
+                    updated_fields.append("unit")
                 if existing.total_price is None and candidate.total_price is not None:
                     existing.total_price = candidate.total_price
+                    updated_fields.append("total_price")
                 if existing.unit_price is None and candidate.unit_price is not None:
                     existing.unit_price = candidate.unit_price
+                    updated_fields.append("unit_price")
                 existing.confidence = max(existing.confidence, candidate.confidence)
+                if updated_fields:
+                    enriched.append(f"{existing.name} (+{', '.join(updated_fields)})")
                 continue
 
             match = self._match_inventory(candidate.name)
@@ -327,7 +356,8 @@ class ReceiptParser:
                 candidate.confidence = max(candidate.confidence, min(1.0, match.score / 100))
             base_items.append(candidate)
             normalized[key] = candidate
-        return base_items
+            added.append(candidate.name)
+        return base_items, {"added": added, "enriched": enriched}
 
     def _get_inventory(self) -> List[InventoryItem]:
         if self._inventory_cache is None:

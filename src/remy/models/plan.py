@@ -66,6 +66,7 @@ class PlanCandidate(BaseModel):
     inventory_deltas: list[InventoryDelta] = Field(default_factory=list)
     shopping_shortfall: list[ShoppingShortfall] = Field(default_factory=list)
     macros_per_serving: Optional[Macros] = Field(default=None)
+    diagnostics: list[str] = Field(default_factory=list)
 
     model_config = ConfigDict(frozen=True)
 

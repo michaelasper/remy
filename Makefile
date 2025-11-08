@@ -22,7 +22,7 @@ COMPOSE ?= docker-compose
 DEVTOOLS ?= $(PYTHON) -m remy.devtools
 LLAMACPP_SERVICE ?= llamacpp
 
-.PHONY: install install-dev install-server test test-e2e lint typecheck format run-server docker-build docker-run compose-up compose-down compose-logs check coverage clean bootstrap doctor ocr ocr-worker llamacpp-setup rag-setup
+.PHONY: install install-dev install-server test test-e2e lint typecheck format run-server docker-build docker-run compose-up compose-down compose-logs check coverage clean bootstrap doctor ocr ocr-worker llamacpp-setup rag-setup rag-build-index
 
 install:
 	$(PIP) install -e .
@@ -146,3 +146,6 @@ llamacpp-setup:
 
 rag-setup:
 	$(PYTHON) -m remy.rag.setup
+
+rag-build-index:
+	$(PYTHON) -m remy.rag.build_index

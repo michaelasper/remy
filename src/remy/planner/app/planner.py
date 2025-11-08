@@ -7,7 +7,7 @@ import logging
 import re
 from dataclasses import dataclass
 from textwrap import shorten
-from typing import Iterable, List, Mapping, Optional
+from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Set
 
 import httpx
 from pydantic import ValidationError
@@ -155,60 +155,201 @@ def _extract_search_terms(context: PlanningContext, limit: int = 5) -> list[str]
     return terms
 
 
-def _collect_recipe_snippets(context: PlanningContext) -> str:
-    sections: list[str] = []
-    web_snippets = _collect_web_recipe_snippets(context)
-    if web_snippets:
-        sections.append(
-            "Web inspiration:\n" + "\n".join(web_snippets)
-        )
-    rag_snippets = _collect_rag_snippet_lines(context)
-    if rag_snippets:
-        sections.append(
-            "Im2Recipe retrievals:\n" + "\n".join(rag_snippets)
-        )
-    return "\n\n".join(sections)
-
-
-def _collect_web_recipe_snippets(context: PlanningContext) -> list[str]:
+def _collect_recipe_snippets(context: PlanningContext) -> tuple[str, Dict[str, object]]:
     settings = get_settings()
-    if not settings.planner_enable_recipe_search:
-        return []
+    options = getattr(context, "planner_options", None)
+    option_enabled = getattr(options, "recipe_search_enabled", None) if options else None
+    enabled = (
+        bool(option_enabled)
+        if option_enabled is not None
+        else settings.planner_enable_recipe_search
+    )
 
-    terms = _extract_search_terms(context, limit=5)
-    if not terms:
-        return []
+    keyword_overrides: list[str] = []
+    if options and getattr(options, "recipe_search_keywords", None):
+        keyword_overrides = [
+            value.strip()
+            for value in options.recipe_search_keywords
+            if value and value.strip()
+        ]
 
-    query_parts = terms + [context.prefs.diet or "dinner", "recipe"]
-    query = " ".join(query_parts)
-    try:
-        results = search_recipes(query, limit=settings.planner_recipe_search_results)
-    except Exception as exc:  # pragma: no cover - best effort network call
-        logger.warning("Recipe search failed: %s", exc)
-        return []
+    auto_terms = _extract_search_terms(context, limit=5) if not keyword_overrides else []
+    query_terms = keyword_overrides or auto_terms
 
-    lines = []
-    for idx, result in enumerate(results, start=1):
-        snippet = shorten(result.snippet or "", width=220, placeholder="…")
-        lines.append(f"{idx}. {result.title} — {snippet} (source: {result.link})")
-    return lines
+    telemetry: Dict[str, object] = {
+        "enabled": enabled,
+        "keyword_overrides": keyword_overrides,
+        "auto_terms": auto_terms,
+        "query_terms": query_terms,
+        "web_hits": 0,
+        "rag_hits": 0,
+        "web_error": None,
+    }
+
+    sections: list[str] = []
+    web_snippets: list[str] = []
+    if enabled and query_terms:
+        query_parts = list(query_terms)
+        if context.prefs.diet:
+            query_parts.append(context.prefs.diet)
+        query_parts.append("recipe")
+        query = " ".join(query_parts)
+        try:
+            results = search_recipes(query, limit=settings.planner_recipe_search_results)
+        except Exception as exc:  # pragma: no cover - best effort network call
+            telemetry["web_error"] = str(exc)
+            logger.warning(
+                "Recipe search failed (enabled=%s, keywords=%s): %s",
+                enabled,
+                keyword_overrides or None,
+                exc,
+            )
+        else:
+            for idx, result in enumerate(results, start=1):
+                snippet = shorten(result.snippet or "", width=220, placeholder="…")
+                web_snippets.append(f"{idx}. {result.title} — {snippet} (source: {result.link})")
+            telemetry["web_hits"] = len(web_snippets)
+
+    rag_snippets, rag_meta = _collect_rag_snippet_lines(context)
+    telemetry["rag_hits"] = len(rag_snippets)
+    telemetry["rag_docs"] = rag_meta
+
+    if web_snippets:
+        sections.append("Web inspiration:\n" + "\n".join(web_snippets))
+    if rag_snippets:
+        sections.append("Im2Recipe retrievals:\n" + "\n".join(rag_snippets))
+
+    return "\n\n".join(sections), telemetry
 
 
-def _collect_rag_snippet_lines(context: PlanningContext) -> list[str]:
+def _collect_rag_snippet_lines(context: PlanningContext) -> tuple[list[str], list[dict[str, object]]]:
     rag = get_cached_rag()
     if rag is None:
-        return []
+        return [], []
     settings = get_settings()
     top_k = max(1, settings.rag_top_k)
     try:
         documents = rag.retrieve(context, top_k=top_k)
     except Exception as exc:  # pragma: no cover - retrieval best effort
         logger.warning("Im2Recipe RAG retrieval failed: %s", exc)
-        return []
+        return [], []
     snippets = []
+    metadata: list[dict[str, object]] = []
     for idx, doc in enumerate(documents, start=1):
         snippets.append(f"{idx}. {rag.format_document(doc)}")
-    return snippets
+        metadata.append(
+            {
+                "title": doc.title,
+                "source": doc.source,
+                "ingredients": list(doc.ingredients[:5]),
+            }
+        )
+    return snippets, metadata
+
+
+def _log_snippet_telemetry(
+    source: str,
+    context: PlanningContext,
+    telemetry: Dict[str, object],
+) -> None:
+    enabled = bool(telemetry.get("enabled"))
+    logger.info(
+        "Planner snippet telemetry source=%s enabled=%s keywords=%s auto_terms=%s web_hits=%s rag_hits=%s rag_titles=%s diet=%s",
+        source,
+        enabled,
+        telemetry.get("keyword_overrides") or [],
+        telemetry.get("auto_terms") or [],
+        telemetry.get("web_hits"),
+        telemetry.get("rag_hits"),
+        [doc.get("title") for doc in telemetry.get("rag_docs") or []],
+        context.prefs.diet or "flex",
+    )
+    if telemetry.get("web_error"):
+        logger.warning(
+            "Planner snippet search error source=%s error=%s",
+            source,
+            telemetry["web_error"],
+        )
+
+
+def _log_plan_constraint_observability(
+    plan: Plan,
+    context: PlanningContext,
+    generator: str,
+    rag_docs: Optional[Sequence[dict[str, object]]] = None,
+) -> None:
+    diet = (context.prefs.diet or "").strip().lower()
+    allergens = [value.strip().lower() for value in context.prefs.allergens if value.strip()]
+    allergen_hits: Set[str] = set()
+    diet_hits: Set[str] = set()
+
+    for candidate in plan.candidates:
+        for ingredient in candidate.ingredients_required:
+            ingredient_name = (ingredient.name or "").strip().lower()
+            if not ingredient_name:
+                continue
+            for allergen in allergens:
+                if allergen and allergen in ingredient_name:
+                    allergen_hits.add(f"{candidate.title}:{ingredient.name}")
+            banned_terms = _DIET_EXCLUSION_KEYWORDS.get(diet, ())
+            for banned in banned_terms:
+                if banned and banned in ingredient_name:
+                    diet_hits.add(f"{candidate.title}:{ingredient.name}")
+
+    if allergens:
+        if allergen_hits:
+            logger.warning(
+                "Planner allergen match detected generator=%s diet=%s allergens=%s matches=%s",
+                generator,
+                diet or "flex",
+                allergens,
+                sorted(allergen_hits),
+            )
+        else:
+            logger.info(
+                "Planner allergen check passed generator=%s allergens=%s",
+                generator,
+                allergens,
+            )
+    if diet and diet in _DIET_EXCLUSION_KEYWORDS:
+        if diet_hits:
+            logger.warning(
+                "Planner diet check failed generator=%s diet=%s matches=%s",
+                generator,
+                diet,
+                sorted(diet_hits),
+            )
+        else:
+            logger.info(
+                "Planner diet check passed generator=%s diet=%s",
+                generator,
+                diet,
+            )
+    if rag_docs:
+        matches: List[str] = []
+        misses: List[str] = []
+        candidate_titles = [candidate.title.lower() for candidate in plan.candidates]
+        for doc in rag_docs:
+            title = (doc.get("title") or "").strip()
+            if not title:
+                continue
+            normalized = title.lower()
+            if any(normalized in candidate or candidate in normalized for candidate in candidate_titles):
+                matches.append(title)
+            else:
+                misses.append(title)
+        if matches:
+            logger.info(
+                "RAG inspiration adopted generator=%s matches=%s",
+                generator,
+                matches,
+            )
+        if misses:
+            logger.info(
+                "RAG inspiration not used generator=%s misses=%s",
+                generator,
+                misses,
+            )
 
 
 def _render_user_prompt(
@@ -349,6 +490,52 @@ RECIPES: List[Recipe] = [
         primary_ingredients=["lentils"],
     ),
 ]
+
+_DIET_EXCLUSION_KEYWORDS: Dict[str, tuple[str, ...]] = {
+    "vegan": (
+        "chicken",
+        "beef",
+        "pork",
+        "salmon",
+        "shrimp",
+        "egg",
+        "milk",
+        "cheese",
+        "butter",
+        "honey",
+        "fish",
+        "yogurt",
+    ),
+    "vegetarian": (
+        "chicken",
+        "beef",
+        "pork",
+        "salmon",
+        "shrimp",
+        "bacon",
+        "ham",
+        "turkey",
+        "fish",
+    ),
+    "pescatarian": (
+        "chicken",
+        "beef",
+        "pork",
+        "bacon",
+        "ham",
+        "turkey",
+    ),
+    "gluten-free": (
+        "wheat",
+        "pasta",
+        "noodle",
+        "bread",
+        "flour",
+        "barley",
+        "rye",
+        "cracker",
+    ),
+}
 
 
 def _build_constraint_engine() -> ConstraintEngine:
@@ -492,7 +679,14 @@ def generate_plan(context: PlanningContext) -> Plan:
     llm_plan = _generate_plan_with_llm(context)
     if llm_plan is not None:
         return llm_plan
-    return _generate_rule_based_plan(context)
+    logger.info(
+        "Planner falling back to rule-based generator (llm_unavailable). diet=%s allergens=%s",
+        context.prefs.diet or "flex",
+        ",".join(context.prefs.allergens) if context.prefs.allergens else "none",
+    )
+    plan = _generate_rule_based_plan(context)
+    _log_plan_constraint_observability(plan, context, generator="rule-based")
+    return plan
 
 
 def _generate_plan_with_llm(context: PlanningContext) -> Optional[Plan]:
@@ -501,6 +695,7 @@ def _generate_plan_with_llm(context: PlanningContext) -> Optional[Plan]:
     settings = get_settings()
     base_url = settings.planner_llm_base_url
     if not base_url:
+        logger.info("Planner LLM disabled; using rule-based generator.")
         return None
 
     provider = (settings.planner_llm_provider or "openai").strip().lower()
@@ -538,7 +733,8 @@ def _request_openai_plan(
         endpoint = f"{endpoint}/chat/completions"
 
     context_json = context.model_dump_json()
-    recipe_snippets = _collect_recipe_snippets(context)
+    recipe_snippets, snippet_meta = _collect_recipe_snippets(context)
+    _log_snippet_telemetry("openai", context, snippet_meta)
     user_prompt = _render_user_prompt(
         context,
         context_json=context_json,
@@ -571,7 +767,14 @@ def _request_openai_plan(
 
     plan_payload = _extract_json_blob(content)
     try:
-        return Plan.model_validate_json(plan_payload)
+        plan = Plan.model_validate_json(plan_payload)
+        _log_plan_constraint_observability(
+            plan,
+            context,
+            generator="openai-llm",
+            rag_docs=snippet_meta.get("rag_docs"),
+        )
+        return plan
     except ValidationError as exc:
         snippet = plan_payload.strip().replace("\n", " ")[:200]
         raise ValueError(f"Planner LLM output failed validation: {exc}; payload={snippet}") from exc
@@ -605,7 +808,8 @@ def _request_ollama_plan(
         endpoint = f"{endpoint}/api/chat"
 
     context_json = context.model_dump_json()
-    recipe_snippets = _collect_recipe_snippets(context)
+    recipe_snippets, snippet_meta = _collect_recipe_snippets(context)
+    _log_snippet_telemetry("ollama", context, snippet_meta)
     user_prompt = _render_user_prompt(
         context,
         context_json=context_json,
@@ -638,7 +842,14 @@ def _request_ollama_plan(
 
     plan_payload = _extract_json_blob(content)
     try:
-        return Plan.model_validate_json(plan_payload)
+        plan = Plan.model_validate_json(plan_payload)
+        _log_plan_constraint_observability(
+            plan,
+            context,
+            generator="ollama-llm",
+            rag_docs=snippet_meta.get("rag_docs"),
+        )
+        return plan
     except ValidationError as exc:
         snippet = plan_payload.strip().replace("\n", " ")[:200]
         raise ValueError(f"Ollama planner output failed validation: {exc}; payload={snippet}") from exc

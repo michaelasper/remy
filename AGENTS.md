@@ -18,11 +18,11 @@ Create a daily dinner-planning automation that:
 
 | Agent | Purpose | Inputs | Outputs | Notes |
 | --- | --- | --- | --- | --- |
-| Context Assembler | Build LLM planning context from DB + external signals. | SQLite / JSON snapshots, preferences, leftovers | `planning_context.json` | Current stub returns defaults; next major integration point. |
+| Context Assembler | Build LLM planning context from DB + external signals. | SQLite / JSON snapshots, preferences, leftovers | `planning_context.json` | Hydrates from SQLite (inventory, meals, prefs, leftovers) and honors per-run diet/allergen/cuisine overrides; next lift is external cues (calendar/weather). |
 | Menu Planner | Generate candidate meals. | `planning_context.json` | Plan JSON | Stub delegates to `planner.generate_plan()`; replace with rules/LLM. |
-| Diff & Validator | Canonicalize ingredients, compute shortages. | Planner output, inventory | Normalized plan + `shopping_shortfall` | Placeholder; needs schema + diff logic. |
+| Diff & Validator | Canonicalize ingredients, compute shortages. | Planner output, inventory | Normalized plan + `shopping_shortfall` | Expands unit conversions, recomputes macros, clamps deltas, and emits diagnostics for the UI/logs. |
 | Approvals Orchestrator | Handle human approval, dispatch updates. | Normalized plan | Meal + inventory mutations | To be built once DB writes exist. |
-| Shopping Dispatcher | Push shortages to shopping services. | `shopping_shortfall` | HA API calls, future vendor carts | Stubbed. |
+| Shopping Dispatcher | Push shortages to shopping services. | `shopping_shortfall` | HA API calls, future vendor carts | Planner now auto-sends shortfalls to the shopping list DB; future work is external carts/HA sync. |
 | Receipt Ingestor | Parse receipts/OCR -> inventory updates. | Images/CSV/email, `/receipts` uploads | Inventory upserts | Stores uploads in SQLite, drives the Tesseract OCR pipeline, and now supports operator approval to ingest parsed line items into inventory. |
 | Nutrition Estimator | Compute macros per serving. | Candidate ingredients | `macros_per_serving` | Optional extension. |
 | Notifier | Deliver plan + follow-ups to humans. | Message payloads | Home Assistant notifications / push | Stubbed.
@@ -44,7 +44,8 @@ Planning Context
     {"id":33,"name":"broccoli","qty":800,"unit":"g","best_before":"2025-11-06"}
   ],
   "leftovers": [{"name":"beef stew","qty":400,"unit":"g","best_before":"2025-11-04"}],
-  "constraints": {"attendees":2,"time_window":"evening"}
+  "constraints": {"attendees":2,"time_window":"evening","preferred_cuisines":["thai"]},
+  "planner_options": {"recipe_search_enabled":true,"recipe_search_keywords":["sheet pan","citrus"]}
 }
 
 Plan (normalized output)

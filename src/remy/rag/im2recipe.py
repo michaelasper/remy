@@ -5,7 +5,6 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
-import os
 import re
 import shutil
 import urllib.request
@@ -15,6 +14,7 @@ from threading import Lock
 from typing import Iterable, List, Sequence
 
 import numpy as np
+from annoy import AnnoyIndex
 
 from remy.config import get_settings
 from remy.models.context import PlanningContext
@@ -66,13 +66,19 @@ class Im2RecipeRAG:
         model_path: Path,
         corpus_path: Path,
         embedding_dim: int = 384,
+        index_path: Path | None = None,
+        index_trees: int = 50,
     ) -> None:
         self.model_path = model_path
         self.corpus_path = corpus_path
         self.embedding_dim = int(max(64, embedding_dim))
+        self.index_path = index_path
+        self.index_trees = max(1, int(index_trees))
         self._model_digest = self._digest_file(model_path)
         self._documents = self._load_corpus(corpus_path)
-        self._index = self._build_index(self._documents)
+        self._annoy_index: AnnoyIndex | None = None
+        self._dense_index: np.ndarray | None = None
+        self._prepare_indexes()
 
     @property
     def documents(self) -> Sequence[RecipeDocument]:
@@ -83,13 +89,18 @@ class Im2RecipeRAG:
         return self.retrieve_from_text(query_text, top_k=top_k)
 
     def retrieve_from_text(self, text: str, *, top_k: int) -> list[RecipeDocument]:
-        if not self._index.size:
+        if not self._documents:
             return []
-        vector = self._embed_text(text)
-        similarities = self._index @ vector
         top_k = max(1, min(top_k, len(self._documents)))
-        indices = np.argsort(similarities)[-top_k:][::-1]
-        return [self._documents[idx] for idx in indices]
+        vector = self._embed_text(text)
+        if self._annoy_index is not None:
+            indices = self._annoy_index.get_nns_by_vector(vector.tolist(), top_k)
+            return [self._documents[idx] for idx in indices]
+        if self._dense_index is not None and self._dense_index.size:
+            similarities = self._dense_index @ vector
+            indices = np.argsort(similarities)[-top_k:][::-1]
+            return [self._documents[idx] for idx in indices]
+        return []
 
     def format_document(self, doc: RecipeDocument) -> str:
         ingredient_preview = ", ".join(doc.ingredients[:6])
@@ -100,7 +111,27 @@ class Im2RecipeRAG:
             f"First steps: {instructions_preview}"
         )
 
-    def _build_index(self, docs: Sequence[RecipeDocument]) -> np.ndarray:
+    def _prepare_indexes(self) -> None:
+        if not self._documents:
+            self._dense_index = np.zeros((0, self.embedding_dim), dtype=np.float32)
+            return
+
+        if self.index_path is not None:
+            needs_rebuild = (
+                not self.index_path.exists()
+                or self.index_path.stat().st_mtime < self.corpus_path.stat().st_mtime
+            )
+            if needs_rebuild:
+                self._annoy_index = self._build_annoy_index(self._documents)
+                self.index_path.parent.mkdir(parents=True, exist_ok=True)
+                if self._annoy_index.get_n_items() > 0:
+                    self._annoy_index.save(str(self.index_path))
+            else:
+                self._annoy_index = self._load_annoy_index(self.index_path)
+        if self._annoy_index is None:
+            self._dense_index = self._build_dense_index(self._documents)
+
+    def _build_dense_index(self, docs: Sequence[RecipeDocument]) -> np.ndarray:
         if not docs:
             return np.zeros((0, self.embedding_dim), dtype=np.float32)
 
@@ -110,6 +141,24 @@ class Im2RecipeRAG:
         norms = np.linalg.norm(vectors, axis=1, keepdims=True)
         norms[norms == 0] = 1.0
         return (vectors / norms).astype(np.float32)
+
+    def _build_annoy_index(self, docs: Sequence[RecipeDocument]) -> AnnoyIndex:
+        index = AnnoyIndex(self.embedding_dim, "angular")
+        if not docs:
+            index.build(1)
+            return index
+        for idx, doc in enumerate(docs):
+            vector = self._embed_text(self._text_for_recipe(doc))
+            index.add_item(idx, vector.tolist())
+        index.build(self.index_trees)
+        return index
+
+    def _load_annoy_index(self, path: Path) -> AnnoyIndex:
+        index = AnnoyIndex(self.embedding_dim, "angular")
+        loaded = index.load(str(path))
+        if not loaded:
+            return self._build_annoy_index(self._documents)
+        return index
 
     def _embed_text(self, text: str) -> np.ndarray:
         tokens = self._tokenize(text)
@@ -197,5 +246,7 @@ def get_cached_rag() -> Im2RecipeRAG | None:
         model_path=model_path,
         corpus_path=settings.rag_corpus_path,
         embedding_dim=settings.rag_embedding_dim,
+        index_path=settings.rag_index_path,
+        index_trees=settings.rag_index_trees,
     )
     return _RAG_CACHE

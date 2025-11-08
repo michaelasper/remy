@@ -44,10 +44,12 @@ class InventoryItem(BaseModel):
 class LeftoverItem(BaseModel):
     """Prepared leftovers tracked separately from inventory."""
 
+    id: Optional[int] = Field(default=None, ge=1)
     name: str
     quantity: float = Field(alias="qty")
     unit: str
     best_before: Optional[date] = Field(default=None)
+    notes: Optional[str] = Field(default=None, max_length=1000)
 
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
@@ -57,6 +59,16 @@ class Constraints(BaseModel):
 
     attendees: Optional[int] = Field(default=None, ge=1)
     time_window: Optional[str] = Field(default=None)
+    preferred_cuisines: list[str] = Field(default_factory=list)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class PlannerOptions(BaseModel):
+    """Planner-specific execution options that don't fit standard constraints."""
+
+    recipe_search_enabled: bool = Field(default=False)
+    recipe_search_keywords: list[str] = Field(default_factory=list)
 
     model_config = ConfigDict(frozen=True)
 
@@ -70,5 +82,6 @@ class PlanningContext(BaseModel):
     inventory: list[InventoryItem] = Field(default_factory=list)
     leftovers: list[LeftoverItem] = Field(default_factory=list)
     constraints: Constraints = Field(default_factory=Constraints)
+    planner_options: PlannerOptions = Field(default_factory=PlannerOptions)
 
     model_config = ConfigDict(populate_by_name=True)

@@ -39,12 +39,16 @@ def _write_corpus(path: Path) -> Path:
 def test_rag_retrieves_documents(tmp_path):
     model_path = _write_dummy_model(tmp_path / "model.t7")
     corpus_path = _write_corpus(tmp_path / "corpus.json")
+    index_path = tmp_path / "index.ann"
 
     rag = Im2RecipeRAG(
         model_path=model_path,
         corpus_path=corpus_path,
         embedding_dim=64,
+        index_path=index_path,
+        index_trees=5,
     )
+    assert index_path.exists()
 
     context = PlanningContext(
         date=date.today(),
@@ -62,6 +66,16 @@ def test_rag_retrieves_documents(tmp_path):
     assert results[0].title
     snippet = rag.format_document(results[0])
     assert results[0].title in snippet
+
+    rag_again = Im2RecipeRAG(
+        model_path=model_path,
+        corpus_path=corpus_path,
+        embedding_dim=64,
+        index_path=index_path,
+        index_trees=5,
+    )
+    results_again = rag_again.retrieve(context, top_k=1)
+    assert results_again[0].title == results[0].title
 
 
 def test_ensure_model_download_works_with_local_source(tmp_path, monkeypatch):

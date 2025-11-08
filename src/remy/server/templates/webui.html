@@ -127,6 +127,99 @@
                       </select>
                     </div>
                   </div>
+                  <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-4">
+                    <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-300">Preference Overrides</h3>
+                        <p class="text-xs text-slate-500">
+                          Apply diet, allergen, or cuisine tweaks for this run without changing saved preferences.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        @click="applySavedPreferenceOverrides"
+                        class="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-100 transition hover:bg-slate-800"
+                      >
+                        <span class="i-lucide-refresh-cw text-sm"></span>
+                        <span>Use saved prefs</span>
+                      </button>
+                    </div>
+                    <div class="grid gap-4 md:grid-cols-2">
+                      <div class="flex flex-col gap-2">
+                        <label class="text-xs font-semibold uppercase tracking-wide text-slate-400">Diet</label>
+                        <select
+                          v-model="planner.form.diet_override"
+                          class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                        >
+                          <option value="">Use saved preference</option>
+                          <option v-for="option in dietOptions" :key="option.value" :value="option.value">
+                            {{ option.label }}
+                          </option>
+                        </select>
+                      </div>
+                      <div class="flex flex-col gap-2">
+                        <label class="text-xs font-semibold uppercase tracking-wide text-slate-400">Max Prep Time (min)</label>
+                        <input
+                          v-model="planner.form.max_time_min"
+                          type="number"
+                          min="0"
+                          step="5"
+                          placeholder="30"
+                          class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                        />
+                        <p class="text-xs text-slate-500">Leave blank to reuse saved max.</p>
+                      </div>
+                      <div class="flex flex-col gap-2">
+                        <label class="text-xs font-semibold uppercase tracking-wide text-slate-400">Allergens (comma separated)</label>
+                        <input
+                          v-model="planner.form.allergens_text"
+                          type="text"
+                          placeholder="peanut, soy"
+                          class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                        />
+                        <p class="text-xs text-slate-500">Only overridden items will be enforced.</p>
+                      </div>
+                      <div class="flex flex-col gap-2">
+                        <label class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred Cuisines</label>
+                        <input
+                          v-model="planner.form.cuisines_text"
+                          type="text"
+                          placeholder="mexican, mediterranean"
+                          class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                        />
+                        <p class="text-xs text-slate-500">Comma-separated list used as soft guidance.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-3">
+                    <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-300">Recipe Search</h3>
+                        <p class="text-xs text-slate-500">
+                          Pull fresh recipe inspiration via DuckDuckGo; enter optional keywords to steer the search.
+                        </p>
+                      </div>
+                      <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-200">
+                        <input
+                          type="checkbox"
+                          v-model="planner.form.search_enabled"
+                          class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-primary-500 focus:ring-primary-500"
+                        />
+                        <span>{{ planner.form.search_enabled ? "Search enabled" : "Search disabled" }}</span>
+                      </label>
+                    </div>
+                    <div class="flex flex-col gap-2">
+                      <label class="text-xs font-semibold uppercase tracking-wide text-slate-400">Keyword Filters</label>
+                      <input
+                        v-model="planner.form.search_keywords_text"
+                        type="text"
+                        :disabled="!planner.form.search_enabled"
+                        placeholder="e.g., sheet pan dinner, smoky, citrus"
+                        class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40 disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+                      <p class="text-xs text-slate-500">Comma-separated; leave blank to search based on pantry items.</p>
+                    </div>
+                  </div>
                   <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <p class="text-sm" :class="planner.contextStatusColor">{{ planner.contextStatus }}</p>
                     <div class="flex flex-wrap gap-2">
@@ -231,23 +324,45 @@
                           {{ describeCandidate(candidate) }}
                         </p>
                       </div>
-                      <div class="flex flex-wrap gap-2 text-xs font-semibold text-slate-100">
-                        <span class="rounded-full bg-slate-800 px-3 py-1">
-                          ⏱️ {{ candidate.estimated_time_min != null ? candidate.estimated_time_min + " min" : "Flexible prep" }}
+                    <div class="flex flex-wrap gap-2 text-xs font-semibold text-slate-100">
+                      <span class="rounded-full bg-slate-800 px-3 py-1">
+                        ⏱️ {{ candidate.estimated_time_min != null ? candidate.estimated_time_min + " min" : "Flexible prep" }}
+                      </span>
+                      <span class="rounded-full bg-slate-800 px-3 py-1">
+                        🍽️ {{ targetServingsLabel(candidate) }}
+                      </span>
+                      <template v-if="candidate.macros_per_serving">
+                        <span class="rounded-full bg-emerald-900/40 px-3 py-1">
+                          🔥 {{ formatNumber(candidate.macros_per_serving.kcal) || "—" }} kcal
                         </span>
-                        <span class="rounded-full bg-slate-800 px-3 py-1">
-                          🍽️ {{ targetServingsLabel(candidate) }}
+                        <span class="rounded-full bg-emerald-900/40 px-3 py-1">
+                          💪 {{ formatNumber(candidate.macros_per_serving.protein_g) || "—" }} g protein
                         </span>
-                        <template v-if="candidate.macros_per_serving">
-                          <span class="rounded-full bg-emerald-900/40 px-3 py-1">
-                            🔥 {{ formatNumber(candidate.macros_per_serving.kcal) || "—" }} kcal
-                          </span>
-                          <span class="rounded-full bg-emerald-900/40 px-3 py-1">
-                            💪 {{ formatNumber(candidate.macros_per_serving.protein_g) || "—" }} g protein
-                          </span>
-                        </template>
-                      </div>
+                      </template>
+                      <button
+                        type="button"
+                        @click="saveCandidateToMeals(candidate)"
+                        :disabled="isCandidateSaving(candidate)"
+                        class="inline-flex items-center gap-2 rounded-full border border-primary-500/60 bg-primary-500/10 px-3 py-1 text-xs font-semibold text-primary-100 transition hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        <span class="i-lucide-save"></span>
+                        <span>{{ isCandidateSaving(candidate) ? "Saving…" : "Add to Meals" }}</span>
+                      </button>
                     </div>
+                    <div
+                      v-if="candidate.diagnostics && candidate.diagnostics.length"
+                      class="mt-3 rounded-xl border border-indigo-500/40 bg-indigo-500/10 p-3 text-xs text-indigo-100"
+                    >
+                      <p class="font-semibold uppercase tracking-wide text-indigo-200">
+                        Diagnostics
+                      </p>
+                      <ul class="mt-2 space-y-1">
+                        <li v-for="(note, noteIndex) in candidate.diagnostics" :key="noteIndex">
+                          {{ note }}
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
                     <div class="grid gap-6 md:grid-cols-2">
                       <div>
                         <h5 class="text-sm font-semibold uppercase tracking-wide text-slate-400">
@@ -271,8 +386,20 @@
                             Shopping List
                           </p>
                           <ul class="mt-2 space-y-1">
-                            <li v-for="short in candidate.shopping_shortfall" :key="short.name + short.reason">
-                              {{ formatShortfall(short) }}
+                            <li
+                              v-for="short in candidate.shopping_shortfall"
+                              :key="short.name + short.reason"
+                              class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between"
+                            >
+                              <span>{{ formatShortfall(short) }}</span>
+                              <button
+                                type="button"
+                                @click="addShortfallToShoppingList(candidate, short)"
+                                :disabled="isShoppingItemAdding(candidate, short)"
+                                class="inline-flex items-center gap-1 rounded-full border border-amber-400/60 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-100 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                <span>{{ isShoppingItemAdding(candidate, short) ? "Adding…" : "Add to Shopping List" }}</span>
+                              </button>
                             </li>
                           </ul>
                         </div>
@@ -499,6 +626,12 @@
                     Keep a lightweight checklist while you shop, then add everything into inventory with a tap.
                   </p>
                   <p class="text-xs" :class="shopping.statusColor">{{ shopping.status }}</p>
+                  <div
+                    v-if="shopping.reminder"
+                    class="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"
+                  >
+                    {{ shopping.reminder }}
+                  </div>
                 </header>
                 <form
                   @submit.prevent="createShoppingItem"
@@ -1335,16 +1468,35 @@
               loading: false,
               servingTarget: 2,
               showRaw: false,
+              mealSaveState: {},
+              shoppingAddState: {},
               form: {
                 date: new Date().toISOString().slice(0, 10),
                 attendees: 2,
                 time_window: "evening",
+                diet_override: "",
+                allergens_text: "",
+                max_time_min: "",
+                cuisines_text: "",
+                search_enabled: false,
+                search_keywords_text: "",
               },
               contextObject: null,
               contextStatus: "Context not assembled yet.",
               contextStatusColor: "text-slate-300",
               contextLoading: false,
+              overridesInitialized: false,
             },
+            dietOptions: [
+              { value: "omnivore", label: "Omnivore" },
+              { value: "vegetarian", label: "Vegetarian" },
+              { value: "vegan", label: "Vegan" },
+              { value: "pescatarian", label: "Pescatarian" },
+              { value: "keto", label: "Keto" },
+              { value: "mediterranean", label: "Mediterranean" },
+              { value: "gluten-free", label: "Gluten-free" },
+              { value: "dairy-free", label: "Dairy-free" },
+            ],
             preferences: {
               form: {
                 diet: "",
@@ -1373,6 +1525,7 @@
               statusColor: "text-slate-300",
               loading: false,
               pending: {},
+              reminder: "",
             },
             meals: {
               items: [],
@@ -1477,6 +1630,15 @@
             }
             return `${Math.round(value * 100)}%`;
           },
+          parseCsvList(value) {
+            if (!value) {
+              return [];
+            }
+            return value
+              .split(",")
+              .map((entry) => entry.trim())
+              .filter(Boolean);
+          },
           ocrStatusLabel(status) {
             const map = {
               pending: "Pending",
@@ -1507,6 +1669,20 @@
               return normalized;
             }
             return `${normalized.slice(0, 137)}…`;
+          },
+          applySavedPreferenceOverrides() {
+            const prefs = this.preferences.view || {};
+            this.planner.form.diet_override = prefs?.diet || "";
+            this.planner.form.max_time_min =
+              prefs?.max_time_min != null && prefs.max_time_min !== ""
+                ? String(prefs.max_time_min)
+                : "";
+            if (Array.isArray(prefs?.allergens) && prefs.allergens.length) {
+              this.planner.form.allergens_text = prefs.allergens.join(", ");
+            } else {
+              this.planner.form.allergens_text = "";
+            }
+            this.planner.overridesInitialized = true;
           },
           adjustServings(delta) {
             const current = this.planner.servingTarget || 2;
@@ -1602,6 +1778,34 @@
             }
             return item.unit ? `${value} ${item.unit}` : value;
           },
+          computeShoppingReminder(items) {
+            if (!Array.isArray(items) || !items.length) {
+              return "";
+            }
+            const now = Date.now();
+            const staleAges: number[] = [];
+            for (const item of items) {
+              if (item.is_checked) {
+                continue;
+              }
+              const createdAt = Date.parse(item.created_at);
+              if (Number.isNaN(createdAt)) {
+                continue;
+              }
+              const ageDays = (now - createdAt) / (1000 * 60 * 60 * 24);
+              if (ageDays >= 2) {
+                staleAges.push(Math.floor(ageDays));
+              }
+            }
+            if (!staleAges.length) {
+              return "";
+            }
+            const oldest = Math.max(...staleAges);
+            const count = staleAges.length;
+            const dayLabel = oldest === 1 ? "day" : "days";
+            const itemLabel = count === 1 ? "item" : "items";
+            return `${count} ${itemLabel} have been on the list for ${oldest} ${dayLabel}. Consider checking them off or moving them into inventory.`;
+          },
           formatShortfall(short) {
             const amount =
               this.formatAmount(short.need_g, "g") ||
@@ -1627,6 +1831,117 @@
             }
             parts.push(`Scaled to ${this.targetServingsLabel(candidate).toLowerCase()}`);
             return parts.join(" • ");
+          },
+          candidateMealKey(candidate) {
+            const planDate = this.planner.plan?.date || this.planner.form.date;
+            const title = candidate.title || "Remy Dinner";
+            return `${planDate || "pending"}::${title}`;
+          },
+          isCandidateSaving(candidate) {
+            return this.planner.mealSaveState[this.candidateMealKey(candidate)] === "saving";
+          },
+          setCandidateSaveState(candidate, state) {
+            const key = this.candidateMealKey(candidate);
+            this.planner.mealSaveState = {
+              ...this.planner.mealSaveState,
+              [key]: state,
+            };
+          },
+          async saveCandidateToMeals(candidate) {
+            const planDate = this.planner.plan?.date || this.planner.form.date;
+            if (!planDate) {
+              this.planner.status = "Please select a date before saving meals.";
+              this.planner.statusColor = "text-red-300";
+              return;
+            }
+            const title = candidate.title || "Remy Dinner";
+            this.setCandidateSaveState(candidate, "saving");
+            this.planner.status = `Saving ${title} to Meals…`;
+            this.planner.statusColor = "text-primary-300";
+            try {
+              const response = await fetch("/meals", {
+                method: "POST",
+                headers: this.authHeaders({ "Content-Type": "application/json" }),
+                body: JSON.stringify({
+                  date: planDate,
+                  title,
+                  rating: null,
+                  notes: null,
+                }),
+              });
+              if (!response.ok) {
+                const detail = await response.json().catch(() => ({}));
+                throw new Error(detail?.detail || `Status ${response.status}`);
+              }
+              await this.loadMeals();
+              this.planner.status = `${title} saved to Meals.`;
+              this.planner.statusColor = "text-green-300";
+            } catch (error) {
+              this.planner.status = `Unable to save meal: ${error.message}`;
+              this.planner.statusColor = "text-red-300";
+            } finally {
+              this.setCandidateSaveState(candidate, "idle");
+            }
+          },
+          shoppingShortfallKey(candidate, short) {
+            const mealKey = this.candidateMealKey(candidate);
+            return `${mealKey}::${short.name}::${short.reason || "unknown"}`;
+          },
+          isShoppingItemAdding(candidate, short) {
+            return (
+              this.planner.shoppingAddState[this.shoppingShortfallKey(candidate, short)] === "saving"
+            );
+          },
+          setShoppingAddState(candidate, short, state) {
+            const key = this.shoppingShortfallKey(candidate, short);
+            this.planner.shoppingAddState = {
+              ...this.planner.shoppingAddState,
+              [key]: state,
+            };
+          },
+          async addShortfallToShoppingList(candidate, short, options = {}) {
+            const { silent = false, notePrefix = "Plan shortfall" } = options;
+            const name = short.name || "Missing ingredient";
+            if (!silent) {
+              this.setShoppingAddState(candidate, short, "saving");
+              this.planner.status = `Adding ${name} to the shopping list…`;
+              this.planner.statusColor = "text-primary-300";
+            }
+            try {
+              const payload = {
+                name,
+                quantity: short.need_g || short.need_ml || short.need_count || null,
+                unit: short.need_g ? "g" : short.need_ml ? "ml" : short.need_count ? "count" : null,
+                notes: `${notePrefix}: ${candidate.title || "Remy dinner"}`,
+              };
+              const response = await fetch("/shopping-list", {
+                method: "POST",
+                headers: this.authHeaders({ "Content-Type": "application/json" }),
+                body: JSON.stringify(payload),
+              });
+              if (!response.ok) {
+                const detail = await response.json().catch(() => ({}));
+                throw new Error(this.formatApiError(detail, response.status));
+              }
+              if (!silent) {
+                await this.loadShoppingList();
+                this.planner.status = `${name} added to the shopping list.`;
+                this.planner.statusColor = "text-green-300";
+              }
+              return true;
+            } catch (error) {
+              if (!silent) {
+                this.planner.status = `Unable to add ${name}: ${error.message}`;
+                this.planner.statusColor = "text-red-300";
+              } else {
+                console.warn("Auto-add shopping list failed", name, error);
+              }
+              return false;
+            } finally {
+              if (!silent) {
+                this.setShoppingAddState(candidate, short, "idle");
+              }
+            }
           },
           isShoppingItemBusy(itemId) {
             return Boolean(this.shopping.pending[itemId]);
@@ -1671,6 +1986,27 @@
               if (windowValue) {
                 params.set("time_window", windowValue);
               }
+              const dietValue = (this.planner.form.diet_override || "").trim();
+              if (dietValue) {
+                params.set("diet_override", dietValue);
+              }
+              const allergens = this.parseCsvList(this.planner.form.allergens_text);
+              allergens.forEach((allergen) => {
+                params.append("allergens", allergen);
+              });
+              const maxTimeValue = Number(this.planner.form.max_time_min);
+              if (Number.isFinite(maxTimeValue) && maxTimeValue > 0) {
+                params.set("max_time_min", maxTimeValue.toString());
+              }
+              const cuisines = this.parseCsvList(this.planner.form.cuisines_text);
+              cuisines.forEach((cuisine) => {
+                params.append("preferred_cuisines", cuisine);
+              });
+              params.set("recipe_search", this.planner.form.search_enabled ? "true" : "false");
+              const searchKeywords = this.parseCsvList(this.planner.form.search_keywords_text);
+              searchKeywords.forEach((keyword) => {
+                params.append("search_keywords", keyword);
+              });
               const response = await fetch(`/planning-context?${params.toString()}`, {
                 headers: this.authHeaders(),
               });
@@ -1687,6 +2023,13 @@
               this.planner.contextStatusColor = "text-green-300";
               const targetServings = attendeesValue > 0 ? attendeesValue : context?.constraints?.attendees || 2;
               this.planner.servingTarget = Math.max(1, Math.round((targetServings || 2) * 2) / 2);
+              if (context?.planner_options) {
+                this.planner.form.search_enabled = Boolean(context.planner_options.recipe_search_enabled);
+                const keywords = Array.isArray(context.planner_options.recipe_search_keywords)
+                  ? context.planner_options.recipe_search_keywords.filter(Boolean)
+                  : [];
+                this.planner.form.search_keywords_text = keywords.join(", ");
+              }
               return context;
             } catch (error) {
               this.planner.contextStatus = `Context error: ${error.message}`;
@@ -1742,6 +2085,9 @@
                   ? data.allergens.join(", ")
                   : "",
               };
+              if (!this.planner.overridesInitialized) {
+                this.applySavedPreferenceOverrides();
+              }
               this.preferences.status = "Preferences loaded.";
               this.preferences.statusColor = "text-slate-300";
             } catch (error) {
@@ -1789,6 +2135,22 @@
               this.preferences.loading = false;
             }
           },
+          formatApiError(detail, statusCode) {
+            if (!detail) {
+              return `Status ${statusCode}`;
+            }
+            if (typeof detail === "string") {
+              return detail;
+            }
+            if (typeof detail.detail === "string") {
+              return detail.detail;
+            }
+            try {
+              return JSON.stringify(detail);
+            } catch (error) {
+              return `Status ${statusCode}`;
+            }
+          },
           async loadShoppingList() {
             this.shopping.loading = true;
             this.shopping.status = "Loading shopping list…";
@@ -1800,6 +2162,7 @@
               }
               const data = await response.json();
               this.shopping.items = Array.isArray(data) ? data : [];
+              this.shopping.reminder = this.computeShoppingReminder(this.shopping.items);
               const count = this.shopping.items.length;
               this.shopping.status =
                 count === 0 ? "No shopping items yet. Add what you need for tonight." : `Tracking ${count} shopping item(s).`;
@@ -1851,7 +2214,7 @@
               });
               if (!response.ok) {
                 const detail = await response.json().catch(() => ({}));
-                throw new Error(detail?.detail || `Status ${response.status}`);
+                throw new Error(this.formatApiError(detail, response.status));
               }
               this.shopping.status = "Shopping item added.";
               this.shopping.statusColor = "text-green-300";
@@ -1874,7 +2237,7 @@
               });
               if (!response.ok) {
                 const detail = await response.json().catch(() => ({}));
-                throw new Error(detail?.detail || `Status ${response.status}`);
+                throw new Error(this.formatApiError(detail, response.status));
               }
               await this.loadShoppingList();
             } catch (error) {
@@ -1896,7 +2259,7 @@
               });
               if (!response.ok) {
                 const detail = await response.json().catch(() => ({}));
-                throw new Error(detail?.detail || `Status ${response.status}`);
+                throw new Error(this.formatApiError(detail, response.status));
               }
               this.shopping.status = `${item.name} removed from the list.`;
               this.shopping.statusColor = "text-green-300";
@@ -1925,7 +2288,7 @@
               });
               if (!response.ok) {
                 const detail = await response.json().catch(() => ({}));
-                throw new Error(detail?.detail || `Status ${response.status}`);
+                throw new Error(this.formatApiError(detail, response.status));
               }
               this.shopping.status = "Shopping list cleared.";
               this.shopping.statusColor = "text-green-300";

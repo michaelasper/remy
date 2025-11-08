@@ -18,7 +18,8 @@ SAMPLE_CONTEXT = {
         {"id": 2, "name": "broccoli", "qty": 400, "unit": "g"},
     ],
     "leftovers": [],
-    "constraints": {"attendees": 2, "time_window": "evening"},
+    "constraints": {"attendees": 2, "time_window": "evening", "preferred_cuisines": ["mediterranean"]},
+    "planner_options": {"recipe_search_enabled": True, "recipe_search_keywords": ["lemon", "herb chicken"]},
 }
 
 WEB_APP_PAGE = load_template("webui.html").replace(

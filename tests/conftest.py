@@ -16,6 +16,7 @@ from remy.models.plan import (
     InventoryDelta,
     Plan,
     PlanCandidate,
+    ShoppingShortfall,
 )
 from remy.server.app import create_app
 
@@ -55,6 +56,7 @@ def sample_context_payload() -> Dict[str, object]:
         ],
         "leftovers": [],
         "constraints": {"attendees": 2, "time_window": "evening"},
+        "planner_options": {"recipe_search_enabled": False, "recipe_search_keywords": []},
     }
 
 
@@ -71,7 +73,9 @@ def sample_plan() -> Plan:
             IngredientRequirement(ingredient_id=101, name="tofu", quantity_g=200.0)
         ],
         inventory_deltas=[InventoryDelta(ingredient_id=101, use_g=200.0)],
-        shopping_shortfall=[],
+        shopping_shortfall=[
+            ShoppingShortfall(name="green onions", need_count=2, reason="not_in_inventory")
+        ],
         macros_per_serving=None,
     )
     return Plan(date=date.today(), candidates=[candidate])

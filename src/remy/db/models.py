@@ -49,6 +49,30 @@ class InventoryItemORM(Base):
     )
 
 
+class LeftoverORM(Base):
+    """Prepared leftovers captured after previous meals."""
+
+    __tablename__ = "leftovers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    quantity: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    unit: Mapped[str] = mapped_column(String(64), nullable=False, default="g")
+    best_before: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
 class MealORM(Base):
     """Historical meal record, including ratings for preference learning."""
 
@@ -175,6 +199,7 @@ class ShoppingListItemORM(Base):
 __all__ = [
     "Base",
     "InventoryItemORM",
+    "LeftoverORM",
     "MealORM",
     "PreferenceORM",
     "ReceiptORM",
