@@ -86,6 +86,7 @@ Plan (normalized output)
 - Docker:
   - `Dockerfile` builds non-root image with persisted `/app/data`.
   - `docker-compose.yml` exposes API on `:8000` and mounts `remy-data` volume.
+- Native LLM runtime: Docker Compose now launches a llama.cpp sidecar (`llama-cpp-python` server) on `http://llamacpp:11434/v1`; run `make llamacpp-setup` (or `docker compose up -d llamacpp`) to start it and download the default Qwen2.5 0.5B Instruct GGUF. Remy injects `REMY_LLM_PROVIDER=openai`, `REMY_LLM_BASE_URL`, and `REMY_LLM_MODEL` so the planner talks to the sidecar automatically. Switch `REMY_LLM_PROVIDER`/`REMY_LLM_BASE_URL` if you prefer Ollama, vLLM, or another OpenAI-compatible runtime, and flip `REMY_RECIPE_SEARCH_ENABLED=1` to feed the planner DuckDuckGo recipe snippets.
 - Makefile targets:
   - `install`, `install-dev`, `install-server`, `test`, `lint`, `typecheck`, `format`.
   - `bootstrap`, `doctor`, `run-server` (optionally `DURATION=5`), `docker-build`, `docker-run`.
@@ -164,7 +165,7 @@ Guardrails
 🚀 Rollout Phases
 1. **MVP (current)**: mock planner, inventory snapshot, FastAPI + web UI, Docker Compose baseline.
 2. **Data Wiring**: real SQLite schema, Context Assembler reading/writing DB, Approvals flow.
-3. **Smart Planner**: integrate Ollama/vLLM + recipe corpus (RAG).
+3. **Smart Planner**: integrate llama.cpp/vLLM/Ollama + recipe corpus (RAG).
 4. **Receipt OCR**: (MVP landed) local Tesseract pipeline + UI preview; next step is auto-inventory updates.
 5. **Automation Enhancements**: Notifications, shopping integrations, nutrition scoring, preference learning.
 

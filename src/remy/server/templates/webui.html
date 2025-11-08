@@ -86,43 +86,244 @@
           >
             <div class="grid gap-6 p-6 lg:grid-cols-2">
               <div class="flex flex-col gap-4">
-                <header>
-                  <h2 class="text-xl font-semibold text-white">Planning Context</h2>
+                <header class="space-y-2">
+                  <h2 class="text-xl font-semibold text-white">Planner Inputs</h2>
                   <p class="text-sm text-slate-300">
-                    Adjust the context JSON and generate fresh dinner plans.
+                    Choose the dinner date and situational constraints; Remy will pull preferences and inventory from the database automatically.
                   </p>
                 </header>
-                <textarea
-                  v-model="planner.context"
-                  spellcheck="false"
-                  class="min-h-[320px] flex-1 rounded-xl border border-slate-800 bg-slate-950/70 p-4 font-mono text-sm leading-6 text-slate-100 shadow-inner focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
-                ></textarea>
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p class="text-sm" :class="planner.statusColor">{{ planner.status }}</p>
-                  <button
-                    @click="generatePlan"
-                    :disabled="planner.loading"
-                    class="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-500 disabled:cursor-not-allowed disabled:bg-primary-900"
-                  >
-                    <span class="i-lucide-wand-2"></span>
-                    <span>{{ planner.loading ? "Generating…" : "Generate Plan" }}</span>
-                  </button>
+                <form @submit.prevent="generatePlan" class="grid gap-4">
+                  <div class="flex flex-col gap-2">
+                    <label class="text-sm font-medium text-slate-200">Dinner Date</label>
+                    <input
+                      v-model="planner.form.date"
+                      type="date"
+                      required
+                      class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                    />
+                  </div>
+                  <div class="grid gap-4 sm:grid-cols-2">
+                    <div class="flex flex-col gap-2">
+                      <label class="text-sm font-medium text-slate-200">Attendees</label>
+                      <input
+                        v-model.number="planner.form.attendees"
+                        type="number"
+                        min="1"
+                        step="1"
+                        class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                        placeholder="2"
+                      />
+                    </div>
+                    <div class="flex flex-col gap-2">
+                      <label class="text-sm font-medium text-slate-200">Time Window</label>
+                      <select
+                        v-model="planner.form.time_window"
+                        class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                      >
+                        <option value="">Flexible</option>
+                        <option value="evening">Evening</option>
+                        <option value="afternoon">Afternoon</option>
+                        <option value="lunch">Lunch</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p class="text-sm" :class="planner.contextStatusColor">{{ planner.contextStatus }}</p>
+                    <div class="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        @click="assemblePlanningContext()"
+                        :disabled="planner.contextLoading"
+                        class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        <span class="i-lucide-database"></span>
+                        <span>{{ planner.contextLoading ? "Assembling…" : "Assemble Context" }}</span>
+                      </button>
+                      <button
+                        type="submit"
+                        :disabled="planner.loading"
+                        class="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-500 disabled:cursor-not-allowed disabled:bg-primary-900"
+                      >
+                        <span class="i-lucide-wand-2"></span>
+                        <span>{{ planner.loading ? "Generating…" : "Generate Plan" }}</span>
+                      </button>
+                    </div>
+                  </div>
+                </form>
+                <div class="space-y-3">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Context Preview</h4>
+                      <p class="text-xs text-slate-500">Read-only snapshot assembled from the database.</p>
+                    </div>
+                    <span class="rounded-full bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-200">
+                      {{ planner.contextObject?.inventory?.length || 0 }} inventory items
+                    </span>
+                  </div>
+                  <div class="min-h-[200px] rounded-xl border border-slate-800 bg-slate-950/70 p-4 font-mono text-xs leading-6 text-slate-100 shadow-inner overflow-auto">
+                    <pre class="whitespace-pre-wrap break-words">{{ formattedContext }}</pre>
+                  </div>
                 </div>
               </div>
               <div class="flex flex-col gap-4">
-                <header>
-                  <h3 class="text-xl font-semibold text-white">Plan Response</h3>
-                  <p class="text-sm text-slate-300">
-                    The latest plan payload from Remy's planner endpoint.
-                  </p>
+                <header class="flex flex-col gap-3">
+                  <div>
+                    <h3 class="text-xl font-semibold text-white">Recipe Showcase</h3>
+                    <p class="text-sm text-slate-300">
+                      Remy renders the latest plan as cozy, human-friendly recipes.
+                    </p>
+                    <p class="text-xs text-slate-400">
+                      Plan date: <span class="font-semibold text-slate-200">{{ planDateLabel }}</span>
+                    </p>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-3">
+                    <div class="inline-flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 shadow-inner">
+                      <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Target Servings</span>
+                      <div class="flex items-center gap-1">
+                        <button
+                          class="rounded-full border border-slate-700 bg-slate-800 px-2 py-1 text-lg leading-none text-slate-100 hover:bg-slate-700"
+                          @click="adjustServings(-0.5)"
+                          type="button"
+                        >
+                          &minus;
+                        </button>
+                        <span class="min-w-[60px] text-center font-semibold text-white">
+                          {{ servingBadge }}
+                        </span>
+                        <button
+                          class="rounded-full border border-slate-700 bg-slate-800 px-2 py-1 text-lg leading-none text-slate-100 hover:bg-slate-700"
+                          @click="adjustServings(0.5)"
+                          type="button"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      @click="planner.showRaw = !planner.showRaw"
+                      :class="planner.showRaw ? 'bg-primary-600 text-white' : 'bg-slate-800 text-slate-200 hover:bg-slate-700'"
+                      class="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm font-medium transition"
+                    >
+                      <span class="i-lucide-code"></span>
+                      <span>{{ planner.showRaw ? "Hide JSON" : "View JSON" }}</span>
+                    </button>
+                  </div>
+                  <p class="text-xs" :class="planner.statusColor">{{ planner.status }}</p>
                 </header>
+
                 <div
-                  class="min-h-[320px] flex-1 rounded-xl border border-slate-800 bg-slate-950/70 p-4 font-mono text-sm leading-6 text-slate-100 shadow-inner overflow-auto"
+                  v-if="planCandidates.length"
+                  class="space-y-6"
                 >
-                  <pre v-if="formattedPlan" class="whitespace-pre-wrap break-words">{{ formattedPlan }}</pre>
-                  <p v-else class="text-slate-400">
-                    Waiting for plan… Generate a plan to view the response.
-                  </p>
+                  <article
+                    v-for="(candidate, index) in planCandidates"
+                    :key="candidate.title + index"
+                    class="rounded-2xl border border-slate-800 bg-slate-950/70 p-6 shadow-2xl shadow-primary-900/15 space-y-6"
+                  >
+                    <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                      <div class="space-y-2">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-primary-200">
+                          Candidate {{ index + 1 }}
+                        </p>
+                        <h4 class="text-2xl font-semibold text-white">{{ candidate.title || "Untitled Recipe" }}</h4>
+                        <p class="text-sm text-slate-300">
+                          {{ describeCandidate(candidate) }}
+                        </p>
+                      </div>
+                      <div class="flex flex-wrap gap-2 text-xs font-semibold text-slate-100">
+                        <span class="rounded-full bg-slate-800 px-3 py-1">
+                          ⏱️ {{ candidate.estimated_time_min != null ? candidate.estimated_time_min + " min" : "Flexible prep" }}
+                        </span>
+                        <span class="rounded-full bg-slate-800 px-3 py-1">
+                          🍽️ {{ targetServingsLabel(candidate) }}
+                        </span>
+                        <template v-if="candidate.macros_per_serving">
+                          <span class="rounded-full bg-emerald-900/40 px-3 py-1">
+                            🔥 {{ formatNumber(candidate.macros_per_serving.kcal) || "—" }} kcal
+                          </span>
+                          <span class="rounded-full bg-emerald-900/40 px-3 py-1">
+                            💪 {{ formatNumber(candidate.macros_per_serving.protein_g) || "—" }} g protein
+                          </span>
+                        </template>
+                      </div>
+                    </div>
+                    <div class="grid gap-6 md:grid-cols-2">
+                      <div>
+                        <h5 class="text-sm font-semibold uppercase tracking-wide text-slate-400">
+                          Ingredients for {{ targetServingsLabel(candidate) }}
+                        </h5>
+                        <ul class="mt-3 space-y-2 text-sm text-slate-100">
+                          <li
+                            v-for="req in candidate.ingredients_required"
+                            :key="req.name + (req.ingredient_id ?? '')"
+                            class="flex items-start gap-3"
+                          >
+                            <span class="mt-1 h-2 w-2 rounded-full bg-primary-500"></span>
+                            <span>{{ formatRequirement(req, candidate) }}</span>
+                          </li>
+                        </ul>
+                        <div
+                          v-if="candidate.shopping_shortfall && candidate.shopping_shortfall.length"
+                          class="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100"
+                        >
+                          <p class="font-semibold uppercase tracking-wide text-xs text-amber-200">
+                            Shopping List
+                          </p>
+                          <ul class="mt-2 space-y-1">
+                            <li v-for="short in candidate.shopping_shortfall" :key="short.name + short.reason">
+                              {{ formatShortfall(short) }}
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+                      <div>
+                        <h5 class="text-sm font-semibold uppercase tracking-wide text-slate-400">
+                          Step-by-step
+                        </h5>
+                        <ol class="mt-3 space-y-2 text-sm text-slate-100">
+                          <li
+                            v-for="(step, stepIndex) in candidate.steps"
+                            :key="stepIndex"
+                            class="flex gap-3"
+                          >
+                            <span class="font-semibold text-primary-300">{{ stepIndex + 1 }}.</span>
+                            <span>{{ formatStep(step) }}</span>
+                          </li>
+                        </ol>
+                        <div
+                          v-if="candidate.inventory_deltas && candidate.inventory_deltas.length"
+                          class="mt-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-100"
+                        >
+                          <p class="font-semibold uppercase tracking-wide text-xs text-emerald-200">
+                            Inventory Impact
+                          </p>
+                          <ul class="mt-2 space-y-1">
+                            <li
+                              v-for="delta in candidate.inventory_deltas"
+                              :key="delta.ingredient_id + '-' + (delta.use_g ?? delta.use_ml ?? delta.use_count ?? '0')"
+                            >
+                              {{ formatInventoryDelta(delta) }}
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+
+                <div
+                  v-else
+                  class="rounded-2xl border border-dashed border-slate-700 bg-slate-900/40 p-6 text-center text-sm text-slate-300"
+                >
+                  Waiting for plan… Generate a plan to view the recipes.
+                </div>
+
+                <div
+                  v-if="planner.showRaw && formattedPlan"
+                  class="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 font-mono text-xs leading-6 text-slate-100 shadow-inner"
+                >
+                  <pre class="whitespace-pre-wrap break-words">{{ formattedPlan }}</pre>
                 </div>
               </div>
             </div>
@@ -894,6 +1095,17 @@
               status: "Ready to generate a plan.",
               statusColor: "text-slate-300",
               loading: false,
+              servingTarget: 2,
+              showRaw: false,
+              form: {
+                date: new Date().toISOString().slice(0, 10),
+                attendees: 2,
+                time_window: "evening",
+              },
+              contextObject: null,
+              contextStatus: "Context not assembled yet.",
+              contextStatusColor: "text-slate-300",
+              contextLoading: false,
             },
             preferences: {
               form: {
@@ -941,6 +1153,30 @@
             return this.planner.plan
               ? JSON.stringify(this.planner.plan, null, 2)
               : "";
+          },
+          formattedContext() {
+            return this.planner.context || "Context not assembled yet.";
+          },
+          planCandidates() {
+            const candidates = this.planner.plan?.candidates;
+            return Array.isArray(candidates) ? candidates : [];
+          },
+          planDateLabel() {
+            if (!this.planner.plan?.date) {
+              return "—";
+            }
+            try {
+              return new Date(this.planner.plan.date).toLocaleDateString();
+            } catch (error) {
+              return this.planner.plan.date;
+            }
+          },
+          servingBadge() {
+            const value = this.planner.servingTarget;
+            if (!value) {
+              return "Base servings";
+            }
+            return `${value} serving${value === 1 ? "" : "s"}`;
           },
         },
         methods: {
@@ -1020,6 +1256,113 @@
             }
             return `${normalized.slice(0, 137)}…`;
           },
+          adjustServings(delta) {
+            const current = this.planner.servingTarget || 2;
+            const next = Math.min(12, Math.max(1, Math.round((current + delta) * 2) / 2));
+            this.planner.servingTarget = next;
+          },
+          initializeServingTarget(plan, payload) {
+            const candidateServings = Array.isArray(plan?.candidates)
+              ? plan.candidates
+                  .map((candidate) => Number(candidate.servings))
+                  .find((value) => Number.isFinite(value) && value > 0)
+              : null;
+            const contextServings = Number(payload?.constraints?.attendees);
+            const fallback = candidateServings || contextServings || 2;
+            this.planner.servingTarget = Math.max(1, Math.round(fallback * 2) / 2);
+          },
+          targetServings(candidate) {
+            const base = Number(candidate?.servings) || 1;
+            const target = Number(this.planner.servingTarget);
+            if (!Number.isFinite(target) || target <= 0) {
+              return base;
+            }
+            return target;
+          },
+          targetServingsLabel(candidate) {
+            const value = this.targetServings(candidate);
+            return `${value} serving${value === 1 ? "" : "s"}`;
+          },
+          formatNumber(value) {
+            if (!Number.isFinite(value)) {
+              return null;
+            }
+            if (Math.abs(value) >= 10) {
+              return Math.round(value).toString();
+            }
+            return (Math.round(value * 10) / 10).toString();
+          },
+          scaleValue(value, candidate) {
+            if (value == null) {
+              return null;
+            }
+            const base = Number(candidate?.servings) || 1;
+            const target = this.targetServings(candidate);
+            const factor = target / base;
+            return value * factor;
+          },
+          formatAmount(value, unit) {
+            if (value == null) {
+              return null;
+            }
+            const formatted = this.formatNumber(value);
+            if (!formatted) {
+              return null;
+            }
+            return unit ? `${formatted} ${unit}` : formatted;
+          },
+          formatRequirement(req, candidate) {
+            const parts = [];
+            const maybeAdd = (value, unit) => {
+              const scaled = this.scaleValue(value, candidate);
+              const amount = this.formatAmount(scaled, unit);
+              if (amount) {
+                parts.push(amount);
+              }
+            };
+            maybeAdd(req.qty_g, "g");
+            maybeAdd(req.qty_ml, "ml");
+            maybeAdd(req.qty_count, "count");
+            const amount = parts.length ? parts.join(" • ") : "as needed";
+            const label = req.name || "Ingredient";
+            return `${label} — ${amount}`;
+          },
+          formatInventoryDelta(delta) {
+            const amount =
+              this.formatAmount(delta.use_g, "g") ||
+              this.formatAmount(delta.use_ml, "ml") ||
+              this.formatAmount(delta.use_count, "count") ||
+              "usage recorded";
+            const label =
+              delta.ingredient_id != null ? `inventory item #${delta.ingredient_id}` : "inventory";
+            return `${amount} from ${label}`;
+          },
+          formatShortfall(short) {
+            const amount =
+              this.formatAmount(short.need_g, "g") ||
+              this.formatAmount(short.need_ml, "ml") ||
+              this.formatAmount(short.need_count, "count") ||
+              "as needed";
+            const reason = short.reason ? short.reason.replace(/_/g, " ") : "required";
+            return `${short.name || "Ingredient"} — ${amount} (${reason})`;
+          },
+          formatStep(step) {
+            if (!step) {
+              return "Follow your cooking instincts and season to taste.";
+            }
+            return step.replace(/^[\\d\\.\\)\\s]+/, "").trim();
+          },
+          describeCandidate(candidate) {
+            const parts = [];
+            if (candidate.estimated_time_min != null) {
+              parts.push(`${candidate.estimated_time_min} min prep`);
+            }
+            if (candidate.servings != null) {
+              parts.push(`Base serves ${candidate.servings}`);
+            }
+            parts.push(`Scaled to ${this.targetServingsLabel(candidate).toLowerCase()}`);
+            return parts.join(" • ");
+          },
           async refreshAll() {
             await Promise.all([
               this.loadPreferences(),
@@ -1028,28 +1371,71 @@
               this.loadMeals(),
               this.loadSuggestions(),
             ]);
+            try {
+              await this.assemblePlanningContext();
+            } catch (error) {
+              console.warn("Failed to assemble context during refresh", error);
+            }
+          },
+          async assemblePlanningContext() {
+            this.planner.contextLoading = true;
+            this.planner.contextStatus = "Assembling context…";
+            this.planner.contextStatusColor = "text-primary-300";
+            try {
+              const params = new URLSearchParams();
+              const dateValue = this.planner.form.date || new Date().toISOString().slice(0, 10);
+              params.set("date", dateValue);
+              const attendeesValue = Number(this.planner.form.attendees);
+              if (Number.isFinite(attendeesValue) && attendeesValue > 0) {
+                params.set("attendees", attendeesValue.toString());
+              }
+              const windowValue = (this.planner.form.time_window || "").trim();
+              if (windowValue) {
+                params.set("time_window", windowValue);
+              }
+              const response = await fetch(`/planning-context?${params.toString()}`, {
+                headers: this.authHeaders(),
+              });
+              if (!response.ok) {
+                const detail = await response.text();
+                throw new Error(`Context request failed (${response.status}): ${detail || 'unknown error'}`);
+              }
+              const context = await response.json();
+              this.planner.contextObject = context;
+              this.planner.context = JSON.stringify(context, null, 2);
+              const dietLabel = context?.prefs?.diet || "flex";
+              const inventoryCount = context?.inventory?.length || 0;
+              this.planner.contextStatus = `Context ready (diet: ${dietLabel}, ${inventoryCount} inventory items)`;
+              this.planner.contextStatusColor = "text-green-300";
+              const targetServings = attendeesValue > 0 ? attendeesValue : context?.constraints?.attendees || 2;
+              this.planner.servingTarget = Math.max(1, Math.round((targetServings || 2) * 2) / 2);
+              return context;
+            } catch (error) {
+              this.planner.contextStatus = `Context error: ${error.message}`;
+              this.planner.contextStatusColor = "text-red-300";
+              throw error;
+            } finally {
+              this.planner.contextLoading = false;
+            }
           },
           async generatePlan() {
             this.planner.loading = true;
             this.planner.status = "Generating plan…";
             this.planner.statusColor = "text-primary-300";
             try {
-              let payload;
-              try {
-                payload = JSON.parse(this.planner.context);
-              } catch (error) {
-                throw new Error("Context must be valid JSON.");
-              }
+              const context = await this.assemblePlanningContext();
               const response = await fetch("/plan", {
                 method: "POST",
                 headers: this.authHeaders({ "Content-Type": "application/json" }),
-                body: JSON.stringify(payload),
+                body: JSON.stringify(context),
               });
               if (!response.ok) {
                 const detail = await response.text();
                 throw new Error(`Planner request failed (${response.status}): ${detail}`);
               }
               this.planner.plan = await response.json();
+              this.initializeServingTarget(this.planner.plan, payload);
+              this.planner.showRaw = false;
               this.planner.status = "Plan generated successfully.";
               this.planner.statusColor = "text-green-300";
             } catch (error) {

@@ -9,9 +9,11 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+ENV_FILE_CANDIDATES = (Path(".env"), Path(".env.local"))
+
 
 class Settings(BaseModel):
-    """Global application settings loaded from environment variables."""
+    """Global application settings loaded from environment variables or .env files."""
 
     database_path: Path = Field(
         default=Path("./data/remy.db"),
@@ -58,6 +60,34 @@ class Settings(BaseModel):
         default=Path("./data/receipts_archive"),
         description="Directory used to store archived receipt blobs after OCR.",
     )
+    planner_llm_base_url: Optional[str] = Field(
+        default=None,
+        description="Planner LLM base URL (OpenAI-compatible runtime such as llama.cpp, vLLM, etc.).",
+    )
+    planner_llm_model: str = Field(
+        default="Qwen/Qwen1.5-0.5B-Chat",
+        description="Model identifier passed to the planner LLM endpoint.",
+    )
+    planner_llm_temperature: float = Field(
+        default=0.2,
+        description="Sampling temperature for LLM-based planning.",
+    )
+    planner_llm_max_tokens: int = Field(
+        default=1024,
+        description="Maximum tokens to request from the planner LLM.",
+    )
+    planner_llm_provider: str = Field(
+        default="openai",
+        description="Planner LLM provider (openai or ollama).",
+    )
+    planner_enable_recipe_search: bool = Field(
+        default=False,
+        description="When true, augment planner prompt with live recipe search snippets.",
+    )
+    planner_recipe_search_results: int = Field(
+        default=5,
+        description="Number of recipe search snippets to include in the planner prompt.",
+    )
 
     model_config = ConfigDict(frozen=True)
 
@@ -66,44 +96,96 @@ def _coerce_bool(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _parse_env_file(path: Path) -> dict[str, str]:
+    payload: dict[str, str] = {}
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            for raw_line in handle:
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, raw_value = line.split("=", 1)
+                payload[key.strip()] = raw_value.strip()
+    except FileNotFoundError:
+        return {}
+    return payload
+
+
+def _load_env_file_values() -> dict[str, str]:
+    values: dict[str, str] = {}
+    for candidate in ENV_FILE_CANDIDATES:
+        values.update(_parse_env_file(candidate))
+    return values
+
+
 def _load_from_env() -> dict[str, object]:
-    """Load optional overrides from environment variables."""
+    """Load optional overrides from env vars (with .env fallbacks)."""
+
+    file_values = _load_env_file_values()
+
+    def _env(key: str) -> Optional[str]:
+        return os.environ.get(key) or file_values.get(key)
 
     payload: dict[str, object] = {}
-    if (db_path := os.environ.get("REMY_DATABASE_PATH")):
+    if (db_path := _env("REMY_DATABASE_PATH")):
         payload["database_path"] = Path(db_path)
-    if (ha_url := os.environ.get("REMY_HOME_ASSISTANT_BASE_URL")):
+    if (ha_url := _env("REMY_HOME_ASSISTANT_BASE_URL")):
         payload["home_assistant_base_url"] = ha_url
-    if (ha_token := os.environ.get("REMY_HOME_ASSISTANT_TOKEN")):
+    if (ha_token := _env("REMY_HOME_ASSISTANT_TOKEN")):
         payload["home_assistant_token"] = ha_token
-    if (api_token := os.environ.get("REMY_API_TOKEN")):
+    if (api_token := _env("REMY_API_TOKEN")):
         payload["api_token"] = api_token
-    if (log_level := os.environ.get("REMY_LOG_LEVEL")):
+    if (log_level := _env("REMY_LOG_LEVEL")):
         payload["log_level"] = log_level
-    if (log_format := os.environ.get("REMY_LOG_FORMAT")):
+    if (log_format := _env("REMY_LOG_FORMAT")):
         payload["log_format"] = log_format
-    if (log_requests := os.environ.get("REMY_LOG_REQUESTS")):
+    if (log_requests := _env("REMY_LOG_REQUESTS")):
         payload["log_requests"] = _coerce_bool(log_requests)
-    if (ocr_worker_enabled := os.environ.get("REMY_OCR_WORKER_ENABLED")):
+    if (ocr_worker_enabled := _env("REMY_OCR_WORKER_ENABLED")):
         payload["ocr_worker_enabled"] = _coerce_bool(ocr_worker_enabled)
-    if (ocr_worker_poll_interval := os.environ.get("REMY_OCR_WORKER_POLL_INTERVAL")):
+    if (ocr_worker_poll_interval := _env("REMY_OCR_WORKER_POLL_INTERVAL")):
         try:
             payload["ocr_worker_poll_interval"] = float(ocr_worker_poll_interval)
         except ValueError:
             pass
-    if (ocr_worker_batch_size := os.environ.get("REMY_OCR_WORKER_BATCH_SIZE")):
+    if (ocr_worker_batch_size := _env("REMY_OCR_WORKER_BATCH_SIZE")):
         try:
             payload["ocr_worker_batch_size"] = int(ocr_worker_batch_size)
         except ValueError:
             pass
-    if (ocr_lang := os.environ.get("REMY_OCR_LANG")):
+    if (ocr_lang := _env("REMY_OCR_LANG")):
         payload["ocr_default_lang"] = ocr_lang
-    if (archive_path := os.environ.get("REMY_OCR_ARCHIVE_PATH")):
+    if (archive_path := _env("REMY_OCR_ARCHIVE_PATH")):
         payload["ocr_archive_path"] = Path(archive_path)
+    llm_base_url = _env("REMY_LLM_BASE_URL") or _env("REMY_VLLM_BASE_URL")
+    if llm_base_url:
+        payload["planner_llm_base_url"] = llm_base_url
+    if (planner_llm_model := _env("REMY_LLM_MODEL") or _env("REMY_VLLM_MODEL")):
+        payload["planner_llm_model"] = planner_llm_model
+    if (planner_llm_temperature := _env("REMY_LLM_TEMPERATURE") or _env("REMY_VLLM_TEMPERATURE")):
+        try:
+            payload["planner_llm_temperature"] = float(planner_llm_temperature)
+        except ValueError:
+            pass
+    if (planner_llm_max_tokens := _env("REMY_LLM_MAX_TOKENS") or _env("REMY_VLLM_MAX_TOKENS")):
+        try:
+            payload["planner_llm_max_tokens"] = int(planner_llm_max_tokens)
+        except ValueError:
+            pass
+    if (planner_llm_provider := _env("REMY_LLM_PROVIDER")):
+        payload["planner_llm_provider"] = planner_llm_provider
+    if (recipe_search_enabled := _env("REMY_RECIPE_SEARCH_ENABLED")):
+        payload["planner_enable_recipe_search"] = _coerce_bool(recipe_search_enabled)
+    if (recipe_search_results := _env("REMY_RECIPE_SEARCH_RESULTS")):
+        try:
+            payload["planner_recipe_search_results"] = int(recipe_search_results)
+        except ValueError:
+            pass
     return payload
 
 
 @lru_cache
 def get_settings() -> Settings:
     """Return cached application settings."""
+
     return Settings(**_load_from_env())

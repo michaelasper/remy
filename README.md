@@ -22,6 +22,8 @@ Remy is a multi-agent automation platform that assembles a daily dinner plan for
 - Launch the API with `uvicorn remy.server.app:app --reload` and POST planning contexts to `/plan`.
 - Open `http://localhost:8000/` for the Vue-based control center covering planner, inventory, preferences, and receipts.
 - Build and run a containerized server with `docker build -t remy .` followed by `docker run -p 8000:8000 remy` or `docker-compose up --build -d`.
+- The Docker Compose stack now ships with a [llama.cpp](https://github.com/ggerganov/llama.cpp) sidecar (via `llama-cpp-python`) on port `11434`. Run `make llamacpp-setup` (or `docker compose up -d llamacpp`) to start the service; it automatically downloads the default Qwen2.5 0.5B Instruct GGUF the first time it boots. Remy injects `REMY_LLM_PROVIDER=openai`, `REMY_LLM_BASE_URL=http://llamacpp:11434/v1`, and `REMY_LLM_MODEL=qwen2.5-0.5b-instruct-q4_k_m.gguf`, so the planner talks to the sidecar out of the box. To use another OpenAI-compatible endpoint (vLLM/TGI/managed APIs) or Ollama, override the `REMY_LLM_*` variables (plus `LLAMACPP_*` if you want a different GGUF/ctx size) and restart the stack.
+- Opt-in internet search: set `REMY_RECIPE_SEARCH_ENABLED=1` (and optionally `REMY_RECIPE_SEARCH_RESULTS=5`) to let the planner hit DuckDuckGo via the `duckduckgo-search` client, capturing fresh recipe snippets that are injected into the LLM prompt for richer variety.
 - Use `make bootstrap` to create/update `.venv`, `make doctor` to sanity-check local tooling, and `make install-dev`, `make test`, `make check`, or `make run-server` (set `DURATION=5` for a temporary run). The Makefile auto-detects `.venv/bin/python` when present.
 - Generate coverage reports with `make coverage` (requires the `dev` extras).
 - Prefer a reproducible environment via `.devcontainer/devcontainer.json` (VS Code Dev Containers / `devcontainer up`) when collaborating.
@@ -36,7 +38,7 @@ Remy is organized as a collection of focused agents that collaborate through sha
 | Agent | Role | Primary Inputs | Main Outputs | Notes |
 | --- | --- | --- | --- | --- |
 | Context Assembler | Gather all data needed for planning. | SQLite (inventory, meals, preferences), leftovers | `planning_context.json` | Prepares structured context for the planner. |
-| Menu Planner | Design candidate meal plans. | `planning_context.json` | Plan JSON | Starts with a mocked planner; upgrades to a local LLM (Ollama/vLLM) later. |
+| Menu Planner | Design candidate meal plans. | `planning_context.json` | Plan JSON | Starts with a mocked planner; upgrades to a local LLM (llama.cpp/vLLM/Ollama) later. |
 | Diff & Validator | Canonicalize ingredients and compute shortages. | Planner output, inventory DB | Normalized plan, `shopping_shortfall` | Ensures schema compliance and consistent naming. |
 | Approvals Orchestrator | Handle human approval, mutations, and notifications. | Normalized plan | Approved meal, inventory updates | Applies changes transactionally. |
 | Shopping Dispatcher | Sync shortfalls to shopping endpoints. | `shopping_shortfall` | Home Assistant API calls | Future integrations include Instacart and Amazon carts. |
@@ -68,7 +70,7 @@ If the planner fails, the system reuses the most recent approved meal as a fallb
 ## Integrations & Tooling
 
 - **Database**: SQLite backing tables for inventory, meals, preferences, and ingredient metadata.
-- **LLM Runtime**: `generate_plan(context_json)` entry point, initially mocked and later powered by Ollama or vLLM.
+- **LLM Runtime**: `generate_plan(context_json)` entry point, backed by the bundled llama.cpp sidecar (OpenAI-compatible) with optional fallbacks to Ollama or vLLM.
 - **Home Assistant**: Notifications via `/api/services/persistent_notification/create` and shopping list sync via `/api/shopping_list/item`.
 - **Scheduler**: APScheduler triggers the planning pipeline at 15:00 local time.
 - **Web UI (planned)**: `/plan/today` viewer with a future `/plan/approve` endpoint for approvals.
@@ -115,7 +117,7 @@ Set `REMY_OCR_WORKER_ENABLED=true` (plus optional `REMY_OCR_WORKER_POLL_INTERVAL
 ## Roadmap
 
 1. MVP: mock planner, manual CSV imports, Home Assistant notifications.
-2. LLM Integration: connect to Ollama/vLLM for richer plan generation.
+2. LLM Integration: connect to llama.cpp (default), Ollama, or vLLM for richer plan generation.
 3. RAG Recipe Corpus: embed 100–300 local recipes for retrieval-augmented planning.
 4. Receipt OCR/email ingestion for automatic inventory updates.
 5. Nutrition scoring, variety tracking, and advanced preference learning.

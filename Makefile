@@ -20,8 +20,9 @@ PORT ?= 8000
 DURATION ?=
 COMPOSE ?= docker-compose
 DEVTOOLS ?= $(PYTHON) -m remy.devtools
+LLAMACPP_SERVICE ?= llamacpp
 
-.PHONY: install install-dev install-server test test-e2e lint typecheck format run-server docker-build docker-run compose-up compose-down compose-logs check coverage clean bootstrap doctor ocr ocr-worker
+.PHONY: install install-dev install-server test test-e2e lint typecheck format run-server docker-build docker-run compose-up compose-down compose-logs check coverage clean bootstrap doctor ocr ocr-worker llamacpp-setup
 
 install:
 	$(PIP) install -e .
@@ -130,3 +131,15 @@ ocr:
 
 ocr-worker:
 	$(PYTHON) -m remy.cli ocr-worker $(ARGS)
+
+llamacpp-setup:
+	@if ! command -v $(DOCKER) >/dev/null 2>&1; then \
+		echo "Docker command not found. Install Docker or set DOCKER to an alternative."; \
+		exit 1; \
+	fi
+	@if command -v $(firstword $(COMPOSE)) >/dev/null 2>&1; then \
+		$(COMPOSE) up -d $(LLAMACPP_SERVICE); \
+	else \
+		$(DOCKER) compose up -d $(LLAMACPP_SERVICE); \
+	fi
+	@echo "llama.cpp service is starting in Docker Compose (model download handled by the container entrypoint)."

@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date, timedelta
 
+import httpx
+
+from remy.config import get_settings
 from remy.models.context import (
     Constraints,
     InventoryItem,
@@ -149,3 +153,171 @@ def test_leftovers_are_prioritised_when_available():
     plan = generate_plan(context)
     assert plan.candidates
     assert plan.candidates[0].title == "Vegetable Stir-Fry with Tofu"
+
+
+def test_generate_plan_uses_openai_llm_when_available(monkeypatch):
+    monkeypatch.setenv("REMY_LLM_PROVIDER", "openai")
+    monkeypatch.setenv("REMY_LLM_BASE_URL", "http://llm.test/v1")
+    monkeypatch.setenv("REMY_LLM_MODEL", "test-model")
+    get_settings.cache_clear()
+
+    captured = {}
+
+    class DummyResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    class DummyClient:
+        def __init__(self, *args, **kwargs):
+            captured["timeout"] = kwargs.get("timeout")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, json=None):
+            captured["url"] = url
+            captured["payload"] = json
+            plan_payload = {
+                "date": str(date.today()),
+                "candidates": [
+                    {
+                        "title": "LLM Curry",
+                        "estimated_time_min": 30,
+                        "servings": 2,
+                        "steps": ["one", "two"],
+                        "ingredients_required": [],
+                        "inventory_deltas": [],
+                        "shopping_shortfall": [],
+                        "macros_per_serving": None,
+                    }
+                ],
+            }
+            content = json_module.dumps(plan_payload)
+            return DummyResponse({"choices": [{"message": {"content": content}}]})
+
+    json_module = json  # alias to avoid shadowing in DummyClient.post signature
+    monkeypatch.setattr("remy.planner.app.planner.httpx.Client", DummyClient)
+
+    context = PlanningContext(
+        date=date.today(),
+        inventory=[_inventory_item()],
+        prefs=Preferences(diet="vegan", max_time_min=30, allergens=[]),
+        constraints=Constraints(attendees=2),
+    )
+
+    plan = generate_plan(context)
+
+    assert plan.candidates[0].title == "LLM Curry"
+    assert captured["url"].endswith("/chat/completions")
+    assert captured["payload"]["model"] == "test-model"
+
+
+def test_generate_plan_falls_back_when_llm_errors(monkeypatch):
+    monkeypatch.setenv("REMY_LLM_PROVIDER", "openai")
+    monkeypatch.setenv("REMY_LLM_BASE_URL", "http://llm.test/v1")
+    get_settings.cache_clear()
+
+    class FailingClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, json=None):
+            raise httpx.HTTPError("boom")
+
+    monkeypatch.setattr("remy.planner.app.planner.httpx.Client", FailingClient)
+
+    context = PlanningContext(
+        date=date.today(),
+        inventory=[_inventory_item()],
+        prefs=Preferences(diet="omnivore", max_time_min=45, allergens=[]),
+        constraints=Constraints(attendees=2),
+    )
+
+    plan = generate_plan(context)
+    assert plan.candidates  # Fallback still produces a plan
+
+
+def test_generate_plan_uses_ollama_provider(monkeypatch):
+    monkeypatch.setenv("REMY_LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("REMY_LLM_BASE_URL", "http://ollama.test")
+    monkeypatch.setenv("REMY_LLM_MODEL", "test-ollama")
+    get_settings.cache_clear()
+
+    captured = {}
+
+    class DummyResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    class DummyClient:
+        def __init__(self, *args, **kwargs):
+            captured["timeout"] = kwargs.get("timeout")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, json=None):
+            captured["url"] = url
+            captured["payload"] = json
+            plan_payload = {
+                "date": str(date.today()),
+                "candidates": [
+                    {
+                        "title": "Ollama Tofu",
+                        "estimated_time_min": 20,
+                        "servings": 2,
+                        "steps": ["prep", "cook"],
+                        "ingredients_required": [],
+                        "inventory_deltas": [],
+                        "shopping_shortfall": [],
+                        "macros_per_serving": None,
+                    }
+                ],
+            }
+            content = json_module.dumps(plan_payload)
+            response_payload = {
+                "model": "test-ollama",
+                "message": {"role": "assistant", "content": content},
+                "done": True,
+            }
+            return DummyResponse(response_payload)
+
+    json_module = json
+    monkeypatch.setattr("remy.planner.app.planner.httpx.Client", DummyClient)
+
+    context = PlanningContext(
+        date=date.today(),
+        inventory=[_inventory_item()],
+        prefs=Preferences(diet="vegan", max_time_min=30, allergens=[]),
+        constraints=Constraints(attendees=2),
+    )
+
+    plan = generate_plan(context)
+
+    assert plan.candidates[0].title == "Ollama Tofu"
+    assert captured["url"].endswith("/api/chat")
+    assert captured["payload"]["model"] == "test-ollama"

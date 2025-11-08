@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
+import json
+import logging
+import re
 from dataclasses import dataclass
+from textwrap import shorten
 from typing import Iterable, List, Mapping, Optional
 
+import httpx
+from pydantic import ValidationError
+
+from remy.config import get_settings
 from remy.models.context import InventoryItem, PlanningContext
 from remy.models.plan import (
     IngredientRequirement,
@@ -13,6 +21,7 @@ from remy.models.plan import (
     PlanCandidate,
     ShoppingShortfall,
 )
+from remy.search import search_recipes
 
 from .constraint_engine import (
     AllergenExclusionRule,
@@ -26,6 +35,167 @@ from .constraint_engine import (
     RecencyPenaltyRule,
 )
 from .utils import build_inventory_index, normalize_name, resolve_inventory_item
+
+logger = logging.getLogger(__name__)
+
+SYSTEM_PROMPT = (
+    "You are a household dinner planner. Optimize for (1) using inventory before expiry, "
+    "(2) low weekday prep time, (3) variety, and (4) household preferences. "
+    "Return ONLY valid JSON matching this schema and ALWAYS provide 2-3 candidates:\n"
+    '{\n'
+    '  "date": "YYYY-MM-DD",\n'
+    '  "candidates": [\n'
+    '    {\n'
+    '      "title": "string",\n'
+    '      "estimated_time_min": number,\n'
+    '      "servings": number,\n'
+    '      "steps": ["short imperative sentence", ...],\n'
+    '      "ingredients_required": [\n'
+    '        {"ingredient_id": number|null, "name": "string", "qty_g": number, "qty_ml": number|null, "qty_count": number|null}\n'
+    '      ],\n'
+    '      "inventory_deltas": [\n'
+    '        {"ingredient_id": number, "use_g": number|null, "use_ml": number|null, "use_count": number|null}\n'
+    '      ],\n'
+    '      "shopping_shortfall": [\n'
+    '        {"ingredient_id": number|null, "name": "string", "need_g": number|null, "need_ml": number|null, "need_count": number|null, "reason": "not_in_inventory|insufficient_stock"}\n'
+    '      ],\n'
+    '      "macros_per_serving": {"kcal": number|null, "protein_g": number|null, "carb_g": number|null, "fat_g": number|null}|null\n'
+    '    }\n'
+    '  ]\n'
+    '}\n'
+    "Rules: candidates array MUST contain 2 or 3 entries, steps must be an array (no combined paragraphs), "
+    "include inventory_deltas for every ingredient that exists in inventory, and only include shopping_shortfall rows "
+    "when an ingredient is missing or insufficient. Do not emit prose, Markdown, or keys outside this schema. "
+    "Example output:\n"
+    '{\n'
+    '  "date": "2025-01-01",\n'
+    '  "candidates": [\n'
+    '    {\n'
+    '      "title": "Tofu Stir-Fry",\n'
+    '      "estimated_time_min": 25,\n'
+    '      "servings": 2,\n'
+    '      "steps": ["press tofu", "sear tofu", "stir-fry vegetables", "combine and serve"],\n'
+    '      "ingredients_required": [\n'
+    '        {"ingredient_id": 1, "name": "tofu", "qty_g": 350, "qty_ml": null, "qty_count": null}\n'
+    '      ],\n'
+    '      "inventory_deltas": [\n'
+    '        {"ingredient_id": 1, "use_g": 350, "use_ml": null, "use_count": null}\n'
+    '      ],\n'
+    '      "shopping_shortfall": [],\n'
+    '      "macros_per_serving": {"kcal": 420, "protein_g": 30, "carb_g": 18, "fat_g": 20}\n'
+    '    },\n'
+    '    {\n'
+    '      "title": "Chickpea Coconut Curry",\n'
+    '      "estimated_time_min": 30,\n'
+    '      "servings": 2,\n'
+    '      "steps": ["sauté aromatics", "simmer chickpeas with coconut milk", "finish with spinach"],\n'
+    '      "ingredients_required": [\n'
+    '        {"ingredient_id": null, "name": "canned chickpeas", "qty_g": 400, "qty_ml": null, "qty_count": null},\n'
+    '        {"ingredient_id": null, "name": "coconut milk", "qty_g": 350, "qty_ml": null, "qty_count": null},\n'
+    '        {"ingredient_id": null, "name": "spinach", "qty_g": 150, "qty_ml": null, "qty_count": null}\n'
+    '      ],\n'
+    '      "inventory_deltas": [],\n'
+    '      "shopping_shortfall": [\n'
+    '        {"ingredient_id": null, "name": "canned chickpeas", "need_g": 400, "need_ml": null, "need_count": null, "reason": "not_in_inventory"}\n'
+    '      ],\n'
+    '      "macros_per_serving": {"kcal": 480, "protein_g": 20, "carb_g": 30, "fat_g": 25}\n'
+    '    }\n'
+    '  ]\n'
+    '}\n'
+)
+
+USER_PROMPT_TEMPLATE = (
+    "IMPORTANT CONSTRAINTS:\n"
+    "- Diet: {diet}\n"
+    "- Allergens to avoid: {allergens}\n"
+    "- Max prep time: {max_time} minutes\n"
+    "- Attendees: {attendees}\n"
+    "You MUST honor the diet/allergen constraints and keep prep time within the limit.\n"
+    "Here is the planning context for {date}:\n{context_json}\n"
+    "Return 2-3 dinner candidates that obey the schema. "
+    "Respect diet/allergen constraints strictly, prioritize ingredients nearing expiry, "
+    "and only list shopping_shortfall items for ingredients that cannot be fulfilled from inventory. "
+    "If the context is incomplete, reply with {{\"date\": \"{date}\", \"candidates\": []}}."
+    "{recipe_snippets}"
+)
+
+LLM_REQUEST_TIMEOUT = 30.0
+_JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
+
+
+def _extract_search_terms(context: PlanningContext, limit: int = 3) -> list[str]:
+    terms: list[str] = []
+    inventory = sorted(
+        context.inventory,
+        key=lambda item: (item.best_before or context.date, item.name.lower()),
+    )
+    for item in inventory:
+        name = (item.name or "").strip()
+        if not name:
+            continue
+        terms.append(name)
+        if len(terms) >= limit:
+            break
+    if not terms and context.leftovers:
+        for leftover in context.leftovers:
+            name = (leftover.name or "").strip()
+            if name:
+                terms.append(name)
+                if len(terms) >= limit:
+                    break
+    return terms
+
+
+def _collect_recipe_snippets(context: PlanningContext) -> str:
+    settings = get_settings()
+    if not settings.planner_enable_recipe_search:
+        return ""
+
+    terms = _extract_search_terms(context)
+    if not terms:
+        return ""
+
+    query_parts = terms + [context.prefs.diet or "dinner", "recipe"]
+    query = " ".join(query_parts)
+    try:
+        results = search_recipes(query, limit=settings.planner_recipe_search_results)
+    except Exception as exc:  # pragma: no cover - best effort network call
+        logger.warning("Recipe search failed: %s", exc)
+        return ""
+
+    lines = []
+    for idx, result in enumerate(results, start=1):
+        snippet = shorten(result.snippet or "", width=220, placeholder="…")
+        lines.append(f"{idx}. {result.title} — {snippet} (source: {result.link})")
+    return "\n".join(lines)
+
+
+def _render_user_prompt(
+    context: PlanningContext,
+    *,
+    context_json: str,
+    recipe_snippets: str,
+) -> str:
+    diet = context.prefs.diet or "omnivore"
+    allergens_list = context.prefs.allergens or []
+    allergens = ", ".join(allergens_list) if allergens_list else "none"
+    max_time = context.prefs.max_time_min or 45
+    attendees = context.constraints.attendees or 2
+    snippet_block = (
+        "\nHere are recent recipe ideas from the web (use for inspiration, do not copy verbatim):\n"
+        f"{recipe_snippets}"
+        if recipe_snippets
+        else ""
+    )
+    return USER_PROMPT_TEMPLATE.format(
+        date=str(context.date),
+        context_json=context_json,
+        diet=diet,
+        allergens=allergens,
+        max_time=max_time,
+        attendees=attendees,
+        recipe_snippets=snippet_block,
+    )
 
 
 @dataclass(frozen=True)
@@ -255,9 +425,8 @@ def _fallback_candidate(context: PlanningContext) -> PlanCandidate:
     )
 
 
-def generate_plan(context: PlanningContext) -> Plan:
+def _generate_rule_based_plan(context: PlanningContext) -> Plan:
     """Generate dinner plan candidates using the declarative constraint engine."""
-
     inventory_lookup = build_inventory_index(context.inventory)
     engine = _build_constraint_engine()
     evaluations = engine.rank_recipes(context, RECIPES)
@@ -274,3 +443,161 @@ def generate_plan(context: PlanningContext) -> Plan:
             candidates.append(_fallback_candidate(context))
 
     return Plan(date=context.date, candidates=candidates)
+
+
+def generate_plan(context: PlanningContext) -> Plan:
+    """Generate dinner plan candidates, preferring the configured LLM when available."""
+
+    llm_plan = _generate_plan_with_llm(context)
+    if llm_plan is not None:
+        return llm_plan
+    return _generate_rule_based_plan(context)
+
+
+def _generate_plan_with_llm(context: PlanningContext) -> Optional[Plan]:
+    """Call the configured LLM endpoint and parse the response into a Plan."""
+
+    settings = get_settings()
+    base_url = settings.planner_llm_base_url
+    if not base_url:
+        return None
+
+    provider = (settings.planner_llm_provider or "openai").strip().lower()
+    try:
+        if provider == "ollama":
+            return _request_ollama_plan(
+                context=context,
+                base_url=base_url,
+                model=settings.planner_llm_model,
+                temperature=settings.planner_llm_temperature,
+                max_tokens=settings.planner_llm_max_tokens,
+            )
+        return _request_openai_plan(
+            context=context,
+            base_url=base_url,
+            model=settings.planner_llm_model,
+            temperature=settings.planner_llm_temperature,
+            max_tokens=settings.planner_llm_max_tokens,
+        )
+    except Exception as exc:
+        logger.warning("Planner LLM request failed; using rule-based fallback: %s", exc)
+        return None
+
+
+def _request_openai_plan(
+    *,
+    context: PlanningContext,
+    base_url: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+) -> Plan:
+    endpoint = base_url.rstrip("/")
+    if not endpoint.endswith("/chat/completions"):
+        endpoint = f"{endpoint}/chat/completions"
+
+    context_json = context.model_dump_json()
+    recipe_snippets = _collect_recipe_snippets(context)
+    user_prompt = _render_user_prompt(
+        context,
+        context_json=context_json,
+        recipe_snippets=recipe_snippets,
+    )
+    safe_temperature = max(0.0, float(temperature))
+    safe_max_tokens = max(1, int(max_tokens))
+    payload = {
+        "model": model,
+        "temperature": safe_temperature,
+        "max_tokens": safe_max_tokens,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+    }
+
+    with httpx.Client(timeout=LLM_REQUEST_TIMEOUT) as client:
+        response = client.post(endpoint, json=payload)
+    response.raise_for_status()
+
+    body = response.json()
+    choices = body.get("choices") or []
+    if not choices:
+        raise ValueError("Planner LLM returned no choices.")
+    message = choices[0].get("message") or {}
+    content = (message.get("content") or "").strip()
+    if not content:
+        raise ValueError("Planner LLM returned an empty response.")
+
+    plan_payload = _extract_json_blob(content)
+    try:
+        return Plan.model_validate_json(plan_payload)
+    except ValidationError as exc:
+        snippet = plan_payload.strip().replace("\n", " ")[:200]
+        raise ValueError(f"Planner LLM output failed validation: {exc}; payload={snippet}") from exc
+
+
+def _extract_json_blob(text: str) -> str:
+    """Return a JSON object substring from raw LLM text."""
+
+    match = _JSON_BLOCK_RE.search(text)
+    if match:
+        return match.group(1).strip()
+
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        return text[start : end + 1].strip()
+
+    return text.strip()
+
+
+def _request_ollama_plan(
+    *,
+    context: PlanningContext,
+    base_url: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+) -> Plan:
+    endpoint = base_url.rstrip("/")
+    if not endpoint.endswith("/api/chat"):
+        endpoint = f"{endpoint}/api/chat"
+
+    context_json = context.model_dump_json()
+    recipe_snippets = _collect_recipe_snippets(context)
+    user_prompt = _render_user_prompt(
+        context,
+        context_json=context_json,
+        recipe_snippets=recipe_snippets,
+    )
+    safe_temperature = max(0.0, float(temperature))
+    safe_max_tokens = max(1, int(max_tokens))
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        "stream": False,
+        "options": {
+            "temperature": safe_temperature,
+            "num_predict": safe_max_tokens,
+        },
+    }
+
+    with httpx.Client(timeout=LLM_REQUEST_TIMEOUT) as client:
+        response = client.post(endpoint, json=payload)
+    response.raise_for_status()
+
+    body = response.json()
+    message = body.get("message") or {}
+    content = (message.get("content") or "").strip()
+    if not content:
+        raise ValueError("Ollama response did not include content.")
+
+    plan_payload = _extract_json_blob(content)
+    try:
+        return Plan.model_validate_json(plan_payload)
+    except ValidationError as exc:
+        snippet = plan_payload.strip().replace("\n", " ")[:200]
+        raise ValueError(f"Ollama planner output failed validation: {exc}; payload={snippet}") from exc

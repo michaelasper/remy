@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   remy:
     build:
@@ -7,9 +5,15 @@ services:
       dockerfile: Dockerfile
     image: remy/app:latest
     restart: unless-stopped
+    depends_on:
+      llamacpp:
+        condition: service_healthy
     environment:
       REMY_DATABASE_PATH: /app/data/remy.db
       REMY_API_TOKEN: ${REMY_API_TOKEN:-}
+      REMY_LLM_PROVIDER: ${REMY_LLM_PROVIDER:-openai}
+      REMY_LLM_BASE_URL: ${REMY_LLM_BASE_URL:-http://llamacpp:11434/v1}
+      REMY_LLM_MODEL: ${REMY_LLM_MODEL:-qwen2.5-0.5b-instruct-q4_k_m.gguf}
     volumes:
       - remy-data:/app/data
     ports:
@@ -18,7 +22,32 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl -fsS -X POST -H 'Content-Type: application/json' -d '{\"date\":\"1970-01-01\"}' http://127.0.0.1:8000/plan >/dev/null || exit 1",
+          "curl -fsS http://127.0.0.1:8000/ >/dev/null || exit 1",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  llamacpp:
+    image: ghcr.io/ggerganov/llama.cpp:full
+    restart: unless-stopped
+    environment:
+      LLAMACPP_MODEL_PATH: ${LLAMACPP_MODEL_PATH:-/models/qwen2.5-0.5b-instruct-q4_k_m.gguf}
+      LLAMACPP_MODEL_URL: ${LLAMACPP_MODEL_URL:-https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf?download=1}
+      LLAMACPP_CONTEXT_SIZE: ${LLAMACPP_CONTEXT_SIZE:-4096}
+    volumes:
+      - llamacpp-models:/models
+      - ./docker/llamacpp-entrypoint.sh:/opt/remy/llamacpp-entrypoint.sh:ro
+    ports:
+      - "11434:11434"
+    entrypoint:
+      - /bin/sh
+      - /opt/remy/llamacpp-entrypoint.sh
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:11434/v1/models >/dev/null || exit 1",
         ]
       interval: 30s
       timeout: 5s
@@ -26,3 +55,4 @@ services:
 
 volumes:
   remy-data:
+  llamacpp-models:

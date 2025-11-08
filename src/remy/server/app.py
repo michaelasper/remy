@@ -43,6 +43,7 @@ from remy.models.receipt import (
 )
 from remy.ocr import ReceiptOcrService
 from remy.ocr.worker import ReceiptOcrWorker
+from remy.planner.context_builder import assemble_planning_context
 from remy.server import deps, ui
 
 logger = logging.getLogger(__name__)
@@ -204,6 +205,26 @@ def create_app() -> FastAPI:
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={"detail": _normalize_validation_errors(exc.errors())},
+        )
+
+    @application.get(
+        "/planning-context",
+        response_model=PlanningContext,
+        summary="Assemble planning context",
+    )
+    def planning_context_endpoint(
+        context_date: Optional[date] = Query(default=None),
+        attendees: Optional[int] = Query(default=None, ge=1),
+        time_window: Optional[str] = Query(default=None, min_length=1, max_length=64),
+        recent_meals: int = Query(default=14, ge=0, le=60),
+        auth: None = Depends(deps.require_api_token),
+    ) -> PlanningContext:
+        target_date = context_date or date.today()
+        return assemble_planning_context(
+            target_date=target_date,
+            attendees=attendees,
+            time_window=time_window,
+            recent_meal_limit=recent_meals,
         )
 
     @application.post("/plan", response_model=Plan, summary="Generate dinner candidates")
