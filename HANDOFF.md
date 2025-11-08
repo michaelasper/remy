@@ -14,7 +14,8 @@ Context snapshot for the next contributor.
 - **Shopping List UX**: `/shopping-list` tab lets households capture errands, reset the entire list, move purchased items into inventory with a single tap, and now receives LLM shortfalls automatically each time a plan is generated. Backed by `/shopping-list*` endpoints + SQLite table so it works offline-first.
 - **Receipt LLM**: OCR parsing now optionally routes through the configured LLM to clean up line items before they become suggestions; enable via `REMY_RECEIPT_LLM_ENABLED=1`.
 - **Im2Recipe RAG**: Optional retrieval layer downloads `im2recipe_model.t7`, converts Recipe1M exports via `python -m remy.rag.recipe1m`, builds an Annoy index (`make rag-build-index`), and injects the top-k matches into planner prompts.
-- **Diff & Validator**: Planner outputs run through `DiffValidator`, which clamps inventory deltas to on-hand stock, injects shopping shortfalls for missing/insufficient ingredients, and keeps plan payloads consistent with the assembled context.
+- **Diff & Validator**: Planner outputs run through `DiffValidator`, which clamps inventory deltas to on-hand stock, injects shopping shortfalls for missing/insufficient ingredients, emits diagnostics (now logged for telemetry), and keeps plan payloads consistent with the assembled context.
+- **CI & Tooling**: GitHub Actions (`Remy Kitchen CI`) runs Ruff + MyPy + pytest on pushes/PRs; linting obeys 120-char limit, `make typecheck` now passes via relaxed mypy config plus targeted ignores.
 
 ## Recent Changes
 
@@ -33,14 +34,16 @@ Context snapshot for the next contributor.
 13. Planner search controls landed: UI toggle + keyword filter feed `/planning-context`, and the planner respects the new `planner_options` contract end-to-end.
 14. Planner shortfalls now sync straight into the shopping list API and the UI nudges users when unchecked items linger for days.
 15. RAG/LLM observability added: snippet telemetry logs search hits (web/RAG) and diet/allergen checks, plus post-plan logs show which RAG inspirations were actually used.
+16. Integration tests now rely on shared `auth_headers()` helper so guarded endpoints are exercised with tokens; `/planning-context` honors the `date` query alias just like the UI.
+17. README slimmed down with Remy-the-rat branding; detailed docs live under `docs/`.
 
 ## Next Steps / Ideas
 
 - **Leftover Lifecycle**: Add decay/auto-archive heuristics (age-based nudges, auto-dismiss when consumed) and tighter UI surfacing now that leftovers are persisted.
 - **Context Form Observability**: Surface which overrides were applied (and their source) in both the UI and logs, and add presets/history for common combinations.
-- **Diagnostics Telemetry**: Persist Diff & Validator diagnostics (unknown units, macro adjustments, clamp events) so we can trend planner quality over time.
+- **Diagnostics Telemetry**: Persist Diff & Validator diagnostics (unknown units, macro adjustments, clamp events) so we can trend planner quality over time and feed dashboards.
 - **Search Telemetry**: Capture when per-plan search is enabled, which keywords were used, and whether snippets were returned to inform future defaults/presets.
-- **LLM Observability**: Plumb the new logs into metrics/dashboards so we can visualize snippet usage, fallback rates, and diet/allergen hits over time.
+- **LLM Observability Dashboards**: Export the new snippet/diet/allergen logs to Prometheus/Grafana to visualize fallback rates and constraint violations.
 - **Shopping Nudges**: Extend the new reminder system with auto-dismiss/acknowledge flows and optionally notify via push/Home Assistant when urgent items aren't checked off.
 - **OCR Feedback Loop**: Log which suggestions originated from the LLM-assisted parser vs. heuristics so we can tune prompts and know when to fallback.
 - **RAG Corpus Tuning**: Use the new RAG observability data to prune low-signal documents, auto-adjust top-k, and surface metrics in dashboards.
@@ -57,7 +60,7 @@ Context snapshot for the next contributor.
 
 - `docker-compose.yml`, `docker/llamacpp-entrypoint.sh`: llama.cpp sidecar config & startup script.
 - `src/remy/planner/context_builder.py`: DB-driven context assembly logic.
-- `src/remy/server/app.py`: new `/planning-context` endpoint + router wiring.
+- `src/remy/server/app.py`: `/planning-context` endpoint (now accepts `date=` alias) + router wiring.
 - `src/remy/server/templates/webui.html`: updated planner UI, recipe cards, Vue methods.
 - `src/remy/planner/app/planner.py`: prompt templates, DuckDuckGo snippet injection.
 - `tests/integration/test_planning_context_endpoint.py`: coverage for new endpoint.
