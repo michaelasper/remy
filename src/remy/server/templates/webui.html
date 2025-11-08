@@ -40,7 +40,7 @@
             <div>
               <h1 class="text-2xl font-semibold text-white">Remy Control Center</h1>
               <p class="text-sm text-slate-300">
-                Manage dinner planning context, pantry inventory, preferences, and receipts.
+                Your tiny rat chef tracks planning context, pantry inventory, preferences, and receipts from one kitchen console.
               </p>
             </div>
             <div class="flex items-center gap-3">
@@ -89,7 +89,7 @@
                 <header class="space-y-2">
                   <h2 class="text-xl font-semibold text-white">Planner Inputs</h2>
                   <p class="text-sm text-slate-300">
-                    Choose the dinner date and situational constraints; Remy will pull preferences and inventory from the database automatically.
+                    Set tonight’s scene and Remy (yes, the rat) will pull preferences and pantry intel automatically.
                   </p>
                 </header>
                 <form @submit.prevent="generatePlan" class="grid gap-4">
@@ -623,7 +623,7 @@
                 <header class="space-y-2">
                   <h2 class="text-xl font-semibold text-white">Smart Shopping List</h2>
                   <p class="text-sm text-slate-300">
-                    Keep a lightweight checklist while you shop, then add everything into inventory with a tap.
+                    The rat chef’s mise en place: keep a lightweight checklist, push shortages from plans, and restock with a tap.
                   </p>
                   <p class="text-xs" :class="shopping.statusColor">{{ shopping.status }}</p>
                   <div
