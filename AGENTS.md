@@ -2,6 +2,8 @@ AGENTS.md — Jarvis Dinner Planner (Remy)
 
 Purpose: Keep a living map of the multi-agent architecture, runtime surfaces, and success metrics so contributors (human or automated) can ship changes confidently.
 
+> **House Rule**: Every prompt cycle ends with `git commit` + `git push`. The rat chef hates untracked crumbs.
+
 ⸻
 
 🎯 High-Level Goal

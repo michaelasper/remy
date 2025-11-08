@@ -1,5 +1,8 @@
 # Remy Dinner Planner
 
+[![Kitchen CI](https://github.com/michaelasper/remy/actions/workflows/ci.yml/badge.svg)](https://github.com/michaelasper/remy/actions/workflows/ci.yml)
+![Remy Approved](https://img.shields.io/badge/tiny%20chef-Remy%20approved-ff69b4?labelColor=4b275f)
+
 Remy is a FastAPI + Vue sous-chef—named after the tiny rat from *Ratatouille*—that turns pantry data into daily dinner plans. It reads inventory, meals, and preferences from SQLite, proposes 2–3 options, and keeps the shopping list, receipts, and OCR pipeline in sync so your inner rodent chef can plate dinner on time.
 
 ## Quick Start
